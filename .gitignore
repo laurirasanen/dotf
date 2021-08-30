@@ -1,0 +1,30 @@
+# plugin
+addons/*
+!addons/source-python
+addons/source-python/*
+!addons/source-python/plugins
+addons/source-python/plugins/*
+!addons/source-python/plugins/dotf
+
+# resources
+resouce/*
+!resource/source-python
+resource/source-python/*
+!resource/source-python/translations
+resource/source-python/translations/*
+!resource/source-python/translations/dotf
+!resource/source-python/events
+resource/source-python/events/*
+!resource/source-python/events/dotf
+
+# cfg
+cfg/*
+!cfg/source-python
+cfg/source-python/*
+!cfg/source-python/dotf
+
+# sound
+sound/*
+!sound/source-python
+sound/source-python/*
+!sound/source-python/dotf

@@ -23,3 +23,8 @@ class PlayerClass(IntEnum):
 class BotType(IntEnum):
     MELEE = 0
     RANGED = 1
+
+
+class Team(IntEnum):
+    RED = 2
+    BLU = 3

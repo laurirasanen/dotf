@@ -42,6 +42,7 @@ from filters.recipients import RecipientFilter
 # dotf
 from .bot.botmanager import BotManager
 from .player.usermanager import UserManager
+from .map.mapmanager import MapManager
 from .player.user import User
 from .commands.clientcommands import CommandHandler
 from .commands.clientcommands import CommandHandler
@@ -106,6 +107,7 @@ engine_sound.precache_sound("vo/null.wav")
 def on_level_init(level):
     """Called when a new map is loaded."""
     UserManager.instance().add_all()
+    MapManager.instance().on_load_map()
 
 
 @OnLevelEnd

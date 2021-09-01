@@ -45,6 +45,8 @@ message_prefix = SayText2(chat_strings["prefix default"])
 
 message_help = SayText2(chat_strings["help"])
 
+message_start = SayText2(chat_strings["start"])
+
 color_formats = {
     "blue": BLUE,
     "brightgreen": BRIGHT_GREEN,
@@ -66,7 +68,10 @@ color_formats = {
 # =============================================================================
 # >> ALL DECLARATION
 # =============================================================================
-__all__ = (message_help,)
+__all__ = (
+    message_help,
+    message_start,
+)
 
 
 class SafeDict(dict):

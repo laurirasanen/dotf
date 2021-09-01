@@ -14,7 +14,8 @@
 # =============================================================================
 # dotf
 from .clientcommands import CommandHandler, Argument
-from ..chat.messages import message_help
+from ..chat.messages import message_help, message_start
+from ..game.gamemanager import GameManager
 
 
 # =============================================================================
@@ -24,6 +25,12 @@ def _help_handler(user, command):
     """Called when player uses /r command."""
 
     message_help.send(user.player.index)
+
+
+def _start_handler(user, command):
+    """Start game"""
+    GameManager.instance().start_game()
+    message_start.send(user.player.index)
 
 
 # =============================================================================
@@ -38,4 +45,12 @@ def register_commands():
         args=[Argument(str, False, None)],
         description="Shows a general help text or one for a specific command",
         usage="/help <command>",
+    )
+
+    CommandHandler.instance().add_command(
+        name="start",
+        alias=["s"],
+        callback=_start_handler,
+        description="Start game",
+        usage="/start",
     )

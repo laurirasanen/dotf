@@ -14,6 +14,7 @@
 # =============================================================================
 # Source.Python
 from filters.players import PlayerIter
+from mathlib import NULL_VECTOR
 
 # dotf
 from .bot import Bot
@@ -38,10 +39,9 @@ class BotManager:
 
         BotManager.__instance = self
 
-    def add_bot(self, bot_type):
-        bot = Bot(bot_type)
-        bot.spawn()
-        print(f"[dotf] Register bot {bot.bot.name}")
+    def add_bot(self, team, bot_type):
+        bot = Bot(team, bot_type)
+        print(f"[dotf] Register bot {bot.bot.name}, team: {team}, type: {bot_type}")
         self.bots.append(bot)
         return bot
 

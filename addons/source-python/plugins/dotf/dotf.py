@@ -20,6 +20,7 @@ from .core.hooks import *
 from .core.commands.commands import register_commands
 from .core.player.usermanager import UserManager
 from .core.bot.botmanager import BotManager
+from .core.map.mapmanager import MapManager
 
 # =============================================================================
 # >> GLOBAL VARIABLES
@@ -35,8 +36,7 @@ def load():
     queue_command_string(f"exec source-python/dotf/dotf")
     register_commands()
     UserManager.instance().add_all()
-    BotManager.instance().add_bot(0)
-    BotManager.instance().add_bot(1)
+    MapManager.instance().on_load_map()
 
 
 def unload():

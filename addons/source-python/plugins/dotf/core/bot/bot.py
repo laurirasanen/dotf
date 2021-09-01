@@ -21,7 +21,7 @@ from players.entity import Player
 from players.constants import PlayerButtons
 
 # dotf
-from ..helpers import PlayerClass, BotType
+from ..helpers import PlayerClass, BotType, Team
 
 # =============================================================================
 # >> GLOBAL VARIABLES
@@ -41,18 +41,17 @@ ranged_weapon = "tf_weapon_sniperrifle"
 class Bot:
     """A controllable bot class"""
 
-    def __init__(self, bot_type=BotType.MELEE):
+    alive = False
+
+    def __init__(self, team=Team.BLU, bot_type=BotType.MELEE):
         """Create a new bot"""
 
+        self.alive = False
         self.bot = None
         self.controller = None
         self.bot_type = bot_type
-        self.team = 2
+        self.team = team
         self.move_speed = 200
-
-    def spawn(self):
-        if self.bot != None or self.controller != None:
-            return
 
         bot_edict = bot_manager.create_bot("Botty McBotface")
         if bot_edict == None:
@@ -72,6 +71,9 @@ class Bot:
             self.bot.set_property_uchar("m_PlayerClass.m_iClass", ranged_class)
             self.bot.set_property_uchar("m_Shared.m_iDesiredPlayerClass", ranged_class)
 
+    def spawn(self, origin=NULL_VECTOR, rotation=NULL_QANGLE):
+        self.spawn_origin = origin
+        self.spawn_rotation = rotation
         self.bot.spawn(force=True)
 
     def on_spawn(self):
@@ -92,6 +94,9 @@ class Bot:
         self.bot.set_property_bool("m_PlayerClass.m_bUseClassAnimations", True)
         self.bot.set_property_float("m_flModelScale", 0.6)
 
+        self.bot.teleport(self.spawn_origin, self.spawn_rotation)
+        self.alive = True
+
     def kick(self, reason=""):
         if self.bot != None:
             self.bot.kick(reason)
@@ -100,6 +105,9 @@ class Bot:
 
     def tick(self):
         if self.bot == None or self.controller == None:
+            return
+
+        if self.alive == False:
             return
 
         bcmd = self.get_cmd()

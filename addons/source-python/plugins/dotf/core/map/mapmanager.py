@@ -22,6 +22,7 @@ class MapManager:
     __instance = None
 
     bot_spawn_points = []
+    lane_nodes = []
 
     def instance():
         """Singleton instance"""
@@ -34,6 +35,7 @@ class MapManager:
             raise Exception("This class is a singleton, use .instance() access method.")
 
         self.bot_spawn_points = []
+        self.lane_nodes = []
 
         MapManager.__instance = self
 
@@ -41,8 +43,6 @@ class MapManager:
         self.bot_spawn_points.clear()
 
         for point in EntityIter("info_target"):
-            # for attr in dir(point):
-            #     print(f"{attr}: {getattr(point, attr)}")
             if point.target_name.startswith("dotf_bot_spawn_point"):
                 parts = point.target_name.split("_")[4:]
                 spawn = {
@@ -52,11 +52,22 @@ class MapManager:
                     "rotation": point.rotation,
                 }
                 self.bot_spawn_points.append(spawn)
+            elif point.target_name.startswith("dotf_bot_lane_node"):
+                parts = point.target_name.split("_")[4:]
+                node = {
+                    "origin": point.origin,
+                    "index": int(parts[0]),
+                }
+                self.lane_nodes.append(node)
 
         print("[dotf] map loaded")
         print(f"[dotf]   bot spawnpoints: {len(self.bot_spawn_points)}")
+        print(f"[dotf]   lane nodes: {len(self.lane_nodes)}")
 
     def get_spawn_points(self, team, index):
         return filter(
             lambda p: p["team"] == team and p["index"] == index, self.bot_spawn_points
         )
+
+    def get_lane_nodes(self, index):
+        return filter(lambda node: node["index"] == index, self.lane_nodes)

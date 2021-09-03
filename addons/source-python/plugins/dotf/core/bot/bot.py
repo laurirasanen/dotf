@@ -21,7 +21,8 @@ from players.entity import Player
 from players.constants import PlayerButtons
 
 # dotf
-from ..helpers import PlayerClass, BotType, Team
+from ..helpers import PlayerClass, BotType, Team, closest_point_on_line
+from ..map.mapmanager import MapManager
 
 # =============================================================================
 # >> GLOBAL VARIABLES
@@ -53,7 +54,9 @@ class Bot:
         self.team = team
         self.move_speed = 200
 
-        bot_edict = bot_manager.create_bot("Botty McBotface")
+        bot_edict = bot_manager.create_bot(
+            f"{'Blu' if team == Team.BLU else 'Red'} {'melee' if bot_type == BotType.MELEE else 'ranged'} bot"
+        )
         if bot_edict == None:
             raise ValueError("Failed to create a bot")
 
@@ -122,10 +125,7 @@ class Bot:
     def get_cmd(self):
         """Get BotCmd for move, aim direction, buttons, etc."""
 
-        # TODO: big brain method for getting these for current state, etc.
-        move_action = 1
-        shoot_action = 1
-        view_angles = QAngle(0, server.tick % 360, 0)
+        move_action, shoot_action, view_angles = self.get_action()
 
         bcmd = BotCmd()
         bcmd.reset()
@@ -146,7 +146,109 @@ class Bot:
 
         return bcmd
 
-    def get_origin(self):
+    def get_origin(self) -> Vector:
         if self.bot != None:
             return self.bot.origin
         return NULL_VECTOR
+
+    def get_action(self):
+        # 1 = move forward
+        move_action = 0
+        # 1 = shoot
+        shoot_action = 0
+        # direction to look
+        view_angles = NULL_QANGLE
+
+        move_target = self.get_origin()
+
+        # TODO: check for enemies in range + who has aggro
+        # 1. enemy player attacking friendly player
+        # 2. enemy were already attacking (no swap if no higher prio)
+        # 3. closest enemy
+        # 4. enemy attacking us
+        # How does de-aggro work? If for example player runs away
+        # after attacking friendly player? must aggro to other bots
+        # Could keep this simple and just make it always closest enemy?
+        # No "melee" characters in tf2 who would get fucked by no friendly mob aggro.
+
+        # TODO: If aggro, move towards aggro target if not in range, otherwise attack
+
+        # If no aggro, navigate along lane, or back to the lane if not on it
+        lane_count = MapManager.instance().lane_count
+        closest_nodes = []
+        closest_node = None
+        closest_dist = float("inf")
+        for x in range(lane_count):
+            nodes = MapManager.instance().get_lane_nodes(x)
+            for node in nodes:
+                dist = self.get_origin().get_distance(node["origin"])
+                if dist < closest_dist:
+                    closest_dist = dist
+                    closest_nodes = nodes
+                    closest_node = node
+
+        second_node = None
+        direction = 1 if self.team == Team.BLU else -1
+        next_node = None
+        prev_node = None
+
+        # Get next node
+        if (
+            len(nodes) > closest_node["index"] + direction
+            and closest_node["index"] + direction >= 0
+        ):
+            next_node = closest_nodes[closest_node["index"] + direction]
+
+        # Get prev node
+        if (
+            len(nodes) > closest_node["index"] - direction
+            and closest_node["index"] - direction >= 0
+        ):
+            prev_node = closest_nodes[closest_node["index"] - direction]
+
+        # Figure out which to use
+        if next_node == None:
+            second_node = prev_node
+        elif prev_node == None:
+            second_node = next_node
+        else:
+            # Both nodes valid, figure out which side we are on
+            dir_next = next_node["origin"] - closest_node["origin"]
+            dir_to_closest = closest_node["origin"] - self.get_origin()
+            # Are we between closest and next?
+            if dir_next.dot(dir_to_closest) < 0:
+                second_node = next_node
+            else:
+                second_node = prev_node
+
+        # This is the line we want to be on
+        start = None
+        end = None
+        if (closest_node["index"] < second_node["index"] and direction < 0) or (
+            closest_node["index"] > second_node["index"] and direction > 0
+        ):
+            end = closest_node["origin"]
+            start = second_node["origin"]
+        else:
+            end = second_node["origin"]
+            start = closest_node["origin"]
+
+        line = end - start
+
+        # Are we on the line?
+        closest_point = closest_point_on_line(start, end, self.get_origin())
+        margin = 32.0
+        if closest_point.get_distance(self.get_origin()) > margin:
+            move_target = closest_point
+        else:
+            # Overshoot end a bit to avoid weirdness if we're very close to it
+            move_target = end + line.normalized() * 10.0
+
+        to_move_target = move_target - self.get_origin()
+        move_margin = 1.0
+        if to_move_target.length > move_margin:
+            # Let's move
+            to_move_target.get_vector_angles(Vector(0, 0, 1), view_angles)
+            move_action = 1
+
+        return move_action, shoot_action, view_angles

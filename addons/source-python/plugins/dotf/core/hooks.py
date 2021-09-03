@@ -172,7 +172,8 @@ def on_player_spawn(event):
 @Event("player_death")
 def on_player_death(event):
     """Called when a player dies."""
-    pass
+    player = Player.from_userid(event["userid"])
+    BotManager.instance().on_death(player.index)
 
 
 # =============================================================================

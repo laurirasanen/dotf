@@ -46,13 +46,13 @@ class GameManager:
 
         blu_bot_spawns = MapManager.instance().get_spawn_points(Team.BLU, 0)
         for point in blu_bot_spawns:
-            BotManager.instance().add_bot(Team.BLU, 0).spawn(
+            BotManager.instance().add_bot(Team.BLU, 1).spawn(
                 point["origin"], point["rotation"]
             )
 
         red_bot_spawns = MapManager.instance().get_spawn_points(Team.RED, 0)
         for point in red_bot_spawns:
-            BotManager.instance().add_bot(Team.RED, 0).spawn(
+            BotManager.instance().add_bot(Team.RED, 1).spawn(
                 point["origin"], point["rotation"]
             )
 

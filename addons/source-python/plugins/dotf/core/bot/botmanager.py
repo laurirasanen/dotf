@@ -70,3 +70,8 @@ class BotManager:
         bot = self.bot_from_index(index)
         if bot != None:
             bot.on_spawn()
+
+    def on_death(self, index):
+        bot = self.bot_from_index(index)
+        if bot != None:
+            bot.on_death()

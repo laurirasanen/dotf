@@ -15,6 +15,7 @@
 # Source.Python
 from engines.server import server
 from entities.helpers import index_from_edict
+from filters.players import PlayerIter
 from mathlib import Vector, NULL_VECTOR, QAngle, NULL_QANGLE
 from players.bots import bot_manager, BotCmd
 from players.entity import Player
@@ -42,12 +43,14 @@ ranged_weapon = "tf_weapon_sniperrifle"
 class Bot:
     """A controllable bot class"""
 
-    alive = False
+    spawned = False
+    aggro_target = None
 
     def __init__(self, team=Team.BLU, bot_type=BotType.MELEE):
         """Create a new bot"""
 
-        self.alive = False
+        self.spawned = False
+        self.aggro_target = None
         self.bot = None
         self.controller = None
         self.bot_type = bot_type
@@ -98,7 +101,11 @@ class Bot:
         self.bot.set_property_float("m_flModelScale", 0.6)
 
         self.bot.teleport(self.spawn_origin, self.spawn_rotation)
-        self.alive = True
+        self.spawned = True
+
+    def on_death(self):
+        self.spawned = False
+        self.aggro_target = None
 
     def kick(self, reason=""):
         if self.bot != None:
@@ -110,7 +117,8 @@ class Bot:
         if self.bot == None or self.controller == None:
             return
 
-        if self.alive == False:
+        if self.spawned == False or self.bot.dead:
+            self.tick_dead()
             return
 
         bcmd = self.get_cmd()
@@ -122,17 +130,22 @@ class Bot:
                 ammoType = self.bot.active_weapon.get_property_int("m_iPrimaryAmmoType")
                 self.bot.set_property_int(f"localdata.m_iAmmo.00{ammoType}", 25)
 
+    def tick_dead(self):
+        bcmd = BotCmd()
+        bcmd.reset()
+        self.controller.run_player_move(bcmd)
+
     def get_cmd(self):
         """Get BotCmd for move, aim direction, buttons, etc."""
 
-        move_action, shoot_action, view_angles = self.get_action()
+        move_action, attack_action, view_angles = self.get_action()
 
         bcmd = BotCmd()
         bcmd.reset()
 
         bcmd.forward_move = self.move_speed * move_action
 
-        if shoot_action == 1:
+        if attack_action == 1:
             bcmd.buttons |= PlayerButtons.ATTACK
 
         bcmd.view_angles = view_angles
@@ -151,27 +164,92 @@ class Bot:
             return self.bot.origin
         return NULL_VECTOR
 
+    def get_range(self) -> float:
+        if self.bot_type == BotType.MELEE:
+            return 48.0
+        else:
+            return self.get_aggro_range() - 24.0
+
+    def get_aggro_range(self) -> float:
+        return 256.0
+
+    def get_eye_pos(self) -> Vector:
+        if self.bot != None:
+            return self.bot.origin + self.bot.view_offset
+        return NULL_VECTOR
+
     def get_action(self):
         # 1 = move forward
         move_action = 0
         # 1 = shoot
-        shoot_action = 0
+        attack_action = 0
         # direction to look
         view_angles = NULL_QANGLE
 
+        if self.bot.dead:
+            return move_action, attack_action, view_angles
+
         move_target = self.get_origin()
 
-        # TODO: check for enemies in range + who has aggro
-        # 1. enemy player attacking friendly player
-        # 2. enemy were already attacking (no swap if no higher prio)
-        # 3. closest enemy
-        # 4. enemy attacking us
-        # How does de-aggro work? If for example player runs away
-        # after attacking friendly player? must aggro to other bots
-        # Could keep this simple and just make it always closest enemy?
-        # No "melee" characters in tf2 who would get fucked by no friendly mob aggro.
+        # TODO:
+        # - figure out de-aggro from players
+        # - visibility check, dont aggro through walls
+        #   - check if any friendly has vision
+        # - prio players over buildings
 
-        # TODO: If aggro, move towards aggro target if not in range, otherwise attack
+        """
+        # Check if existing target is still valid
+        if self.aggro_target != None:
+            if self.aggro_target.dead:
+                self.aggro_target = None
+            elif (
+                self.aggro_target.origin.get_distance(self.get_origin())
+                > self.get_aggro_range()
+            ):
+                self.aggro_target = None
+
+        if self.aggro_target == None:
+            # No prev target or invalid,
+            # check for enemies in our range
+            closest_dist = float("inf")
+            for p in PlayerIter():
+                if p.dead == False and p.team != self.bot.team:
+                    dist = p.origin.get_distance(self.get_origin())
+                    if dist < closest_dist:
+                        closest_dist = dist
+                        if dist <= self.get_aggro_range():
+                            self.aggro_target = p
+                            print(f"{self.bot.name} aggro to {p.name}")
+        """
+        self.aggro_target = None
+        closest_dist = float("inf")
+        for p in PlayerIter():
+            if p.dead == False and p.team != self.bot.team:
+                dist = p.origin.get_distance(self.get_origin())
+                if dist < closest_dist:
+                    closest_dist = dist
+                    if dist <= self.get_aggro_range():
+                        self.aggro_target = p
+
+        # If have aggro, move towards aggro target if not in range, otherwise attack
+        if self.aggro_target != None:
+            dist = self.aggro_target.origin.get_distance(self.get_origin())
+            if dist < self.get_range():
+                attack_action = 1
+                move_action = 0
+            else:
+                attack_action = 0
+                move_action = 1
+
+            # Face aggro
+            target_center = self.aggro_target.origin
+            target_center.z += (
+                self.aggro_target.get_property_vector("m_Collision.m_vecMaxs").z * 0.5
+            )
+            direction = target_center - self.get_eye_pos()
+            direction.get_vector_angles(Vector(0, 0, 1), view_angles)
+
+            return move_action, attack_action, view_angles
 
         # If no aggro, navigate along lane, or back to the lane if not on it
         lane_count = MapManager.instance().lane_count
@@ -251,4 +329,4 @@ class Bot:
             to_move_target.get_vector_angles(Vector(0, 0, 1), view_angles)
             move_action = 1
 
-        return move_action, shoot_action, view_angles
+        return move_action, attack_action, view_angles

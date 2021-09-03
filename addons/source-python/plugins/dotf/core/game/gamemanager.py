@@ -44,17 +44,22 @@ class GameManager:
         if self.state.started:
             return
 
-        blu_bot_spawns = MapManager.instance().get_spawn_points(Team.BLU, 0)
-        for point in blu_bot_spawns:
-            BotManager.instance().add_bot(Team.BLU, 1).spawn(
-                point["origin"], point["rotation"]
+        for lane_index in range(MapManager.instance().lane_count):
+            blu_bot_spawns = MapManager.instance().get_spawn_points(
+                Team.BLU, lane_index
             )
+            for point in blu_bot_spawns:
+                BotManager.instance().add_bot(Team.BLU, point["bot_type"]).spawn(
+                    point["origin"], point["rotation"]
+                )
 
-        red_bot_spawns = MapManager.instance().get_spawn_points(Team.RED, 0)
-        for point in red_bot_spawns:
-            BotManager.instance().add_bot(Team.RED, 1).spawn(
-                point["origin"], point["rotation"]
+            red_bot_spawns = MapManager.instance().get_spawn_points(
+                Team.RED, lane_index
             )
+            for point in red_bot_spawns:
+                BotManager.instance().add_bot(Team.RED, point["bot_type"]).spawn(
+                    point["origin"], point["rotation"]
+                )
 
         self.state.started = True
 

@@ -53,6 +53,7 @@ class MapManager:
                     "origin": point.origin,
                     "team": int(parts[0]),
                     "lane": int(parts[1]),
+                    "bot_type": int(parts[2]),
                     "rotation": point.rotation,
                 }
                 self.bot_spawn_points.append(spawn)

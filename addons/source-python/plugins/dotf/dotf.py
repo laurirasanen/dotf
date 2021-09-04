@@ -14,6 +14,7 @@
 # =============================================================================
 # Source.Python
 from engines.server import queue_command_string
+from cvars import cvar
 
 # dotf
 from .core.hooks import *
@@ -33,7 +34,11 @@ from .core.map.mapmanager import MapManager
 def load():
     """Called when Source.Python loads the plugin."""
     print(f"[dotf] Loaded!")
+    # main server cfg
     queue_command_string(f"exec source-python/dotf/dotf")
+    # protected cvars, TODO move to .ini
+    cvar.find_var("tf_dropped_weapon_lifetime").set_int(0)
+
     register_commands()
     UserManager.instance().add_all()
     MapManager.instance().on_load_map()

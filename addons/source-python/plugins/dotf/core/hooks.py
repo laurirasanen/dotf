@@ -26,7 +26,7 @@ from listeners import (
     OnLevelEnd,
 )
 from entities import TakeDamageInfo
-from entities.hooks import EntityPreHook, EntityCondition
+from entities.hooks import EntityPreHook, EntityPostHook, EntityCondition
 from entities.entity import Entity
 from events import Event
 from events.hooks import PreEvent, EventAction
@@ -48,6 +48,7 @@ from memory import (
 from memory.hooks import PreHook
 from messages.hooks import HookUserMessage
 from filters.recipients import RecipientFilter
+from weapons.entity import Weapon
 
 # dotf
 from .bot.botmanager import BotManager
@@ -151,7 +152,7 @@ def on_client_disconnect(index):
 
 
 # =============================================================================
-# >> PRE-EVENTS
+# >> PRE-HOOKS
 # =============================================================================
 @PreEvent("player_death")
 def pre_player_death(event):
@@ -164,6 +165,12 @@ def pre_player_team(event):
     """Called before a player joins a team."""
     # Don't broadcast to other players.
     return EventAction.STOP_BROADCAST
+
+
+@PreEvent("building_healed")
+def pre_building_healed(event):
+    # TODO: engineer tower heal
+    pass
 
 
 @EntityPreHook(EntityCondition.is_player, "on_take_damage_alive")
@@ -208,7 +215,7 @@ def pre_take_damage_alive_player(args):
 
 
 # =============================================================================
-# >> EVENTS
+# >> HOOKS
 # =============================================================================
 @Event("player_spawn")
 def on_player_spawn(event):

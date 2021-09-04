@@ -89,7 +89,7 @@ class Bot:
 
     def on_spawn(self):
         # These will need to be applied after spawning
-        # self.bot.set_noblock(True)
+        self.bot.set_noblock(True)
 
         self.bot.call_input("SetCustomModel", self.config["model"])
         for weapon in self.bot.weapons():
@@ -156,6 +156,30 @@ class Bot:
 
         for index in self.bot.weapon_indexes(classname=self.config["weapon"]):
             bcmd.weaponselect = index
+
+        # Avoid nearby friendly players and bots.
+        # Melee attacks will deal no damage if inside a friendly player...
+        closest_friendly = None
+        closest_dist = float("inf")
+        for player in PlayerIter():
+            if player == self.bot:
+                continue
+            if player.team == self.bot.team:
+                dist = player.origin.get_distance(self.get_origin())
+                if dist < 24.0 and dist < closest_dist:
+                    closest_dist = dist
+                    closest_friendly = player
+
+        if closest_friendly != None:
+            left = Vector()
+            view_angles.get_angle_vectors(None, None, left)
+            to_closest = closest_friendly.origin - self.get_origin()
+            if left.dot(to_closest) < 0:
+                # closest friendly is on our right, move left
+                bcmd.side_move = -self.move_speed * 0.5
+            else:
+                # closest friendly is on our left, move right
+                bcmd.side_move = self.move_speed * 0.5
 
         return bcmd
 
@@ -228,6 +252,10 @@ class Bot:
             if dist < self.config.as_float("attack_range"):
                 attack_action = 1
                 move_action = 0
+                # TODO: this stops working if target is too close,
+                # something wrong with get_distance?
+                if dist < self.config.as_float("attack_range_min"):
+                    move_action = -1
             else:
                 attack_action = 0
                 move_action = 1

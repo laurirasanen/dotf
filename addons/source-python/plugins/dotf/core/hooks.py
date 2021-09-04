@@ -30,6 +30,7 @@ from entities.hooks import EntityPreHook, EntityCondition
 from entities.entity import Entity
 from events import Event
 from events.hooks import PreEvent, EventAction
+from mathlib import NULL_VECTOR
 from players.helpers import playerinfo_from_index, userid_from_index
 from players.entity import Player
 from steam import SteamID
@@ -168,6 +169,7 @@ def pre_player_team(event):
 @EntityPreHook(EntityCondition.is_player, "on_take_damage_alive")
 def pre_take_damage_alive_player(args):
     info = make_object(TakeDamageInfo, args[1])
+    victim = make_object(Player, args[0])
     attacker = None
 
     if info.attacker == 0:
@@ -196,6 +198,13 @@ def pre_take_damage_alive_player(args):
     attacker_player = UserManager.instance().user_from_index(attacker.index)
     if attacker_player != None:
         pass
+
+    # Handle bot victim
+    victim_bot = BotManager.instance().bot_from_index(victim.index)
+    if victim_bot != None:
+        # don't throw bots around
+        # FIXME
+        info.force = NULL_VECTOR
 
 
 # =============================================================================

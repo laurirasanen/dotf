@@ -16,6 +16,7 @@
 from configobj import ConfigObj
 
 # Source.Python
+from engines.trace import engine_trace, Ray, ContentMasks, TraceFilterSimple, GameTrace
 from engines.server import server
 from entities.helpers import index_from_edict
 from filters.players import PlayerIter
@@ -244,7 +245,27 @@ class Bot:
                 if dist < closest_dist:
                     closest_dist = dist
                     if dist <= self.config.as_float("aggro_range"):
-                        self.aggro_target = p
+                        # Close enough to aggro, check visibility
+                        trace = GameTrace()
+                        engine_trace.trace_ray(
+                            Ray(
+                                self.get_eye_pos(),
+                                p.origin
+                                + Vector(
+                                    0,
+                                    0,
+                                    p.get_property_vector("m_Collision.m_vecMaxs").z,
+                                ),
+                            ),
+                            ContentMasks.PLAYER_SOLID,
+                            TraceFilterSimple(PlayerIter()),
+                            trace,
+                        )
+                        if trace.did_hit() and trace.entity.index == 0:
+                            # hit world
+                            pass
+                        else:
+                            self.aggro_target = p
 
         # If have aggro, move towards aggro target if not in range, otherwise attack
         if self.aggro_target != None:

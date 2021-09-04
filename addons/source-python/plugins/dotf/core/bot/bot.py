@@ -23,6 +23,7 @@ from mathlib import Vector, NULL_VECTOR, QAngle, NULL_QANGLE
 from players.bots import bot_manager, BotCmd
 from players.entity import Player
 from players.constants import PlayerButtons
+from entities.constants import CollisionGroup
 
 # dotf
 from ..helpers import PlayerClass, BotType, Team, closest_point_on_line
@@ -58,7 +59,7 @@ class Bot:
             if bot_type == BotType.MELEE
             else bot_config["bot_ranged"]
         )
-        self.move_speed = self.config["move_speed"]
+        self.move_speed = self.config.as_float("move_speed")
 
         bot_edict = bot_manager.create_bot(
             f"{'Blu' if team == Team.BLU else 'Red'} {'melee' if bot_type == BotType.MELEE else 'ranged'} bot"
@@ -71,11 +72,14 @@ class Bot:
             raise ValueError("Failed to get bot controller")
 
         # Settings we can apply before spawn
+        # TODO: move props to .ini ?
         self.bot = Player(index_from_edict(bot_edict))
         self.bot.team = self.team
-        self.bot.set_property_uchar("m_PlayerClass.m_iClass", self.config["class"])
         self.bot.set_property_uchar(
-            "m_Shared.m_iDesiredPlayerClass", self.config["class"]
+            "m_PlayerClass.m_iClass", self.config.as_int("class")
+        )
+        self.bot.set_property_uchar(
+            "m_Shared.m_iDesiredPlayerClass", self.config.as_int("class")
         )
 
     def spawn(self, origin=NULL_VECTOR, rotation=NULL_QANGLE):
@@ -85,16 +89,18 @@ class Bot:
 
     def on_spawn(self):
         # These will need to be applied after spawning
-        self.bot.set_noblock(True)
+        # self.bot.set_noblock(True)
 
         self.bot.call_input("SetCustomModel", self.config["model"])
         for weapon in self.bot.weapons():
             if weapon.weapon_name != self.config["weapon"]:
                 weapon.remove()
 
-        # TOOD: move props to .ini ?
+        # TODO: move props to .ini ?
         self.bot.set_property_bool("m_PlayerClass.m_bUseClassAnimations", True)
-        self.bot.set_property_float("m_flModelScale", self.config["model_scale"])
+        self.bot.set_property_float(
+            "m_flModelScale", float(self.config.as_float("model_scale"))
+        )
 
         self.bot.teleport(self.spawn_origin, self.spawn_rotation)
         self.spawned = True
@@ -121,11 +127,11 @@ class Bot:
         self.controller.run_player_move(bcmd)
 
         # Refill ammo
-        if self.config["ammo"] > 0:
+        if self.config.as_int("ammo") > 0:
             if self.bot.active_weapon != None:
                 ammoType = self.bot.active_weapon.get_property_int("m_iPrimaryAmmoType")
                 self.bot.set_property_int(
-                    f"localdata.m_iAmmo.00{ammoType}", self.config["ammo"]
+                    f"localdata.m_iAmmo.00{ammoType}", self.config.as_int("ammo")
                 )
 
     def tick_dead(self):
@@ -189,7 +195,7 @@ class Bot:
                 self.aggro_target = None
             elif (
                 self.aggro_target.origin.get_distance(self.get_origin())
-                > self.config["aggro_range"]
+                > self.config.as_float("aggro_range")
             ):
                 self.aggro_target = None
 
@@ -202,7 +208,7 @@ class Bot:
                     dist = p.origin.get_distance(self.get_origin())
                     if dist < closest_dist:
                         closest_dist = dist
-                        if dist <= self.config["aggro_range"]:
+                        if dist <= self.config.as_float("aggro_range"):
                             self.aggro_target = p
                             print(f"{self.bot.name} aggro to {p.name}")
         """
@@ -213,13 +219,13 @@ class Bot:
                 dist = p.origin.get_distance(self.get_origin())
                 if dist < closest_dist:
                     closest_dist = dist
-                    if dist <= self.config["aggro_range"]:
+                    if dist <= self.config.as_float("aggro_range"):
                         self.aggro_target = p
 
         # If have aggro, move towards aggro target if not in range, otherwise attack
         if self.aggro_target != None:
             dist = self.aggro_target.origin.get_distance(self.get_origin())
-            if dist < self.config["attack_range"]:
+            if dist < self.config.as_float("attack_range"):
                 attack_action = 1
                 move_action = 0
             else:

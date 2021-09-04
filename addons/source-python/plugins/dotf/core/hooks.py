@@ -25,16 +25,25 @@ from listeners import (
     OnLevelInit,
     OnLevelEnd,
 )
+from entities import TakeDamageInfo
+from entities.hooks import EntityPreHook, EntityCondition
+from entities.entity import Entity
 from events import Event
 from events.hooks import PreEvent, EventAction
-from players.helpers import playerinfo_from_index
+from players.helpers import playerinfo_from_index, userid_from_index
 from players.entity import Player
 from steam import SteamID
 from cvars import ConVar
 from effects.base import TempEntity
 from engines.server import server, engine_server
 from engines.sound import engine_sound
-from memory import DataType, Convention, get_object_pointer, get_virtual_function
+from memory import (
+    DataType,
+    Convention,
+    get_object_pointer,
+    get_virtual_function,
+    make_object,
+)
 from memory.hooks import PreHook
 from messages.hooks import HookUserMessage
 from filters.recipients import RecipientFilter
@@ -154,6 +163,39 @@ def pre_player_team(event):
     """Called before a player joins a team."""
     # Don't broadcast to other players.
     return EventAction.STOP_BROADCAST
+
+
+@EntityPreHook(EntityCondition.is_player, "on_take_damage_alive")
+def pre_take_damage_alive_player(args):
+    info = make_object(TakeDamageInfo, args[1])
+    attacker = None
+
+    if info.attacker == 0:
+        # World
+        return
+    else:
+        # Some other entity
+        try:
+            attacker = Player.from_userid(userid_from_index(info.attacker))
+        except ValueError:
+            # Not a player, try to get player from owner
+            try:
+                owner_handle = Entity(info.inflictor).owner_handle
+                attacker = Player.from_inthandle(owner_handle)
+            except (ValueError, OverflowError):
+                # Not a player or invalid handle
+                return
+
+    # Handle bot attacker
+    attacker_bot = BotManager.instance().bot_from_index(attacker.index)
+    if attacker_bot != None:
+        info.base_damage = attacker_bot.config.as_float("damage")
+        info.damage = attacker_bot.config.as_float("damage")
+
+    # Handle player attacker
+    attacker_player = UserManager.instance().user_from_index(attacker.index)
+    if attacker_player != None:
+        pass
 
 
 # =============================================================================

@@ -12,6 +12,9 @@
 # =============================================================================
 # >> IMPORTS
 # =============================================================================
+# Python
+from configobj import ConfigObj
+
 # Source.Python
 from engines.server import server
 from entities.helpers import index_from_edict
@@ -24,18 +27,12 @@ from players.constants import PlayerButtons
 # dotf
 from ..helpers import PlayerClass, BotType, Team, closest_point_on_line
 from ..map.mapmanager import MapManager
+from ..constants import CFG_PATH
 
 # =============================================================================
 # >> GLOBAL VARIABLES
 # =============================================================================
-melee_class = PlayerClass.HEAVY
-ranged_class = PlayerClass.SNIPER
-
-melee_model = "models/bots/heavy/bot_heavy.mdl"
-ranged_model = "models/bots/sniper/bot_sniper.mdl"
-
-melee_weapon = "tf_weapon_fists"
-ranged_weapon = "tf_weapon_sniperrifle"
+bot_config = ConfigObj(CFG_PATH + "/bot_settings.ini")
 
 # =============================================================================
 # >> CLASSES
@@ -45,6 +42,7 @@ class Bot:
 
     spawned = False
     aggro_target = None
+    config = None
 
     def __init__(self, team=Team.BLU, bot_type=BotType.MELEE):
         """Create a new bot"""
@@ -55,7 +53,12 @@ class Bot:
         self.controller = None
         self.bot_type = bot_type
         self.team = team
-        self.move_speed = 200
+        self.config = (
+            bot_config["bot_melee"]
+            if bot_type == BotType.MELEE
+            else bot_config["bot_ranged"]
+        )
+        self.move_speed = self.config["move_speed"]
 
         bot_edict = bot_manager.create_bot(
             f"{'Blu' if team == Team.BLU else 'Red'} {'melee' if bot_type == BotType.MELEE else 'ranged'} bot"
@@ -70,12 +73,10 @@ class Bot:
         # Settings we can apply before spawn
         self.bot = Player(index_from_edict(bot_edict))
         self.bot.team = self.team
-        if self.bot_type == BotType.MELEE:
-            self.bot.set_property_uchar("m_PlayerClass.m_iClass", melee_class)
-            self.bot.set_property_uchar("m_Shared.m_iDesiredPlayerClass", melee_class)
-        else:
-            self.bot.set_property_uchar("m_PlayerClass.m_iClass", ranged_class)
-            self.bot.set_property_uchar("m_Shared.m_iDesiredPlayerClass", ranged_class)
+        self.bot.set_property_uchar("m_PlayerClass.m_iClass", self.config["class"])
+        self.bot.set_property_uchar(
+            "m_Shared.m_iDesiredPlayerClass", self.config["class"]
+        )
 
     def spawn(self, origin=NULL_VECTOR, rotation=NULL_QANGLE):
         self.spawn_origin = origin
@@ -86,19 +87,14 @@ class Bot:
         # These will need to be applied after spawning
         self.bot.set_noblock(True)
 
-        if self.bot_type == BotType.MELEE:
-            self.bot.call_input("SetCustomModel", melee_model)
-            for weapon in self.bot.weapons():
-                if weapon.weapon_name != melee_weapon:
-                    weapon.remove()
-        else:
-            self.bot.call_input("SetCustomModel", ranged_model)
-            for weapon in self.bot.weapons():
-                if weapon.weapon_name != ranged_weapon:
-                    weapon.remove()
+        self.bot.call_input("SetCustomModel", self.config["model"])
+        for weapon in self.bot.weapons():
+            if weapon.weapon_name != self.config["weapon"]:
+                weapon.remove()
 
+        # TOOD: move props to .ini ?
         self.bot.set_property_bool("m_PlayerClass.m_bUseClassAnimations", True)
-        self.bot.set_property_float("m_flModelScale", 0.6)
+        self.bot.set_property_float("m_flModelScale", self.config["model_scale"])
 
         self.bot.teleport(self.spawn_origin, self.spawn_rotation)
         self.spawned = True
@@ -125,10 +121,12 @@ class Bot:
         self.controller.run_player_move(bcmd)
 
         # Refill ammo
-        if self.bot_type == BotType.RANGED:
+        if self.config["ammo"] > 0:
             if self.bot.active_weapon != None:
                 ammoType = self.bot.active_weapon.get_property_int("m_iPrimaryAmmoType")
-                self.bot.set_property_int(f"localdata.m_iAmmo.00{ammoType}", 25)
+                self.bot.set_property_int(
+                    f"localdata.m_iAmmo.00{ammoType}", self.config["ammo"]
+                )
 
     def tick_dead(self):
         bcmd = BotCmd()
@@ -150,12 +148,8 @@ class Bot:
 
         bcmd.view_angles = view_angles
 
-        if self.bot_type == BotType.MELEE:
-            for index in self.bot.weapon_indexes(classname=melee_weapon):
-                bcmd.weaponselect = index
-        else:
-            for index in self.bot.weapon_indexes(classname=ranged_weapon):
-                bcmd.weaponselect = index
+        for index in self.bot.weapon_indexes(classname=self.config["weapon"]):
+            bcmd.weaponselect = index
 
         return bcmd
 
@@ -163,15 +157,6 @@ class Bot:
         if self.bot != None:
             return self.bot.origin
         return NULL_VECTOR
-
-    def get_range(self) -> float:
-        if self.bot_type == BotType.MELEE:
-            return 48.0
-        else:
-            return self.get_aggro_range() - 24.0
-
-    def get_aggro_range(self) -> float:
-        return 256.0
 
     def get_eye_pos(self) -> Vector:
         if self.bot != None:
@@ -204,7 +189,7 @@ class Bot:
                 self.aggro_target = None
             elif (
                 self.aggro_target.origin.get_distance(self.get_origin())
-                > self.get_aggro_range()
+                > self.config["aggro_range"]
             ):
                 self.aggro_target = None
 
@@ -217,7 +202,7 @@ class Bot:
                     dist = p.origin.get_distance(self.get_origin())
                     if dist < closest_dist:
                         closest_dist = dist
-                        if dist <= self.get_aggro_range():
+                        if dist <= self.config["aggro_range"]:
                             self.aggro_target = p
                             print(f"{self.bot.name} aggro to {p.name}")
         """
@@ -228,13 +213,13 @@ class Bot:
                 dist = p.origin.get_distance(self.get_origin())
                 if dist < closest_dist:
                     closest_dist = dist
-                    if dist <= self.get_aggro_range():
+                    if dist <= self.config["aggro_range"]:
                         self.aggro_target = p
 
         # If have aggro, move towards aggro target if not in range, otherwise attack
         if self.aggro_target != None:
             dist = self.aggro_target.origin.get_distance(self.get_origin())
-            if dist < self.get_range():
+            if dist < self.config["attack_range"]:
                 attack_action = 1
                 move_action = 0
             else:

@@ -102,6 +102,11 @@ class Bot:
         self.bot.set_property_float(
             "m_flModelScale", float(self.config.as_float("model_scale"))
         )
+        self.bot.set_property_int("m_iMaxHealth", self.config.as_int("health"))
+        self.bot.set_property_int("m_iHealth", self.config.as_int("health"))
+        # TODO: m_iMaxHealth doesn't actually set max health in tf2.
+        # use https://github.com/FlaminSarge/tf2attributes ?
+        # TF2Attrib_SetByName(player, "max health additive bonus", health)
 
         self.bot.teleport(self.spawn_origin, self.spawn_rotation)
         self.spawned = True

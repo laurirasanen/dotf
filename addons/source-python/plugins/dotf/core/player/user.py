@@ -17,6 +17,7 @@ from configobj import ConfigObj
 
 # dotf
 from ..constants import CFG_PATH
+from ..helpers.entity import dump_entity_attributes, dump_entity_properties
 
 # =============================================================================
 # >> GLOBAL VARIABLES
@@ -41,12 +42,13 @@ class User:
         self.class_settings = player_config["class_settings"][
             f"{self.player.get_property_uchar('m_PlayerClass.m_iClass')}"
         ]
-        print(
-            f"settings {self.player.name} (class {self.player.get_property_uchar('m_PlayerClass.m_iClass')})"
+        self.player.set_property_int(
+            "m_iMaxHealth", self.class_settings.as_int("health")
         )
-        self.class_settings.walk(
-            lambda section, key: print(f"  {key}: {self.class_settings[key]}")
-        )
+        self.player.set_property_int("m_iHealth", self.class_settings.as_int("health"))
+        # TODO: m_iMaxHealth doesn't actually set max health in tf2.
+        # use https://github.com/FlaminSarge/tf2attributes ?
+        # TF2Attrib_SetByName(player, "max health additive bonus", health)
 
     def tick(self):
         if self.player.dead:

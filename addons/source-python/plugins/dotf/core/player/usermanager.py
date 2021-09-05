@@ -53,10 +53,22 @@ class UserManager:
     def add_all(self):
         for p in PlayerIter.iterator():
             if not p.is_bot():
-                UserManager.instance().add_user(User(p))
+                user = User(p)
+                UserManager.instance().add_user(user)
+                if not p.dead:
+                    user.apply_class_settings()
 
     def user_from_index(self, index):
         for user in self.users:
             if user.player.index == index:
                 return user
         return None
+
+    def on_spawn(self, index):
+        user = self.user_from_index(index)
+        if user != None:
+            user.on_spawn()
+
+    def tick(self):
+        for user in self.users:
+            user.tick()

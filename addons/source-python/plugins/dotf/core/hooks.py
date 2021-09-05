@@ -132,6 +132,7 @@ def on_level_end():
 def on_tick():
     """Called every engine tick."""
     BotManager.instance().tick()
+    UserManager.instance().tick()
 
 
 @OnClientActive
@@ -204,7 +205,8 @@ def pre_take_damage_alive_player(args):
     # Handle player attacker
     attacker_player = UserManager.instance().user_from_index(attacker.index)
     if attacker_player != None:
-        pass
+        info.base_damage *= attacker_player.class_settings.as_float("damage_deal_mult")
+        info.damage *= attacker_player.class_settings.as_float("damage_deal_mult")
 
     # Handle bot victim
     victim_bot = BotManager.instance().bot_from_index(victim.index)
@@ -212,6 +214,12 @@ def pre_take_damage_alive_player(args):
         # don't throw bots around
         # FIXME
         info.force = NULL_VECTOR
+
+    # Handle player victim
+    victim_player = UserManager.instance().user_from_index(victim.index)
+    if victim_player != None:
+        info.base_damage *= victim_player.class_settings.as_float("damage_take_mult")
+        info.damage *= victim_player.class_settings.as_float("damage_take_mult")
 
 
 # =============================================================================
@@ -225,6 +233,7 @@ def on_player_spawn(event):
 
     player = Player.from_userid(event["userid"])
     BotManager.instance().on_spawn(player.index)
+    UserManager.instance().on_spawn(player.index)
 
 
 @Event("player_death")

@@ -15,6 +15,9 @@
 # Python
 from configobj import ConfigObj
 
+# Source.Python
+from engines.server import server
+
 # dotf
 from ..constants import CFG_PATH
 from ..helpers.entity import dump_entity_attributes, dump_entity_properties
@@ -54,4 +57,9 @@ class User:
         if self.player.dead:
             return
 
-        pass
+        regen_interval = self.class_settings.as_int("regen_interval")
+        if regen_interval > 0:
+            if server.tick % regen_interval == 0:
+                regen = self.class_settings.as_int("regen")
+                if self.player.health < self.player.max_health and regen > 0:
+                    self.player.health += regen

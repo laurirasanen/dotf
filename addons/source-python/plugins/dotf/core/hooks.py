@@ -16,6 +16,7 @@
 import os
 from threading import Thread
 import re
+from configobj import ConfigObj
 
 # Source.Python
 from listeners import (
@@ -57,10 +58,14 @@ from .map.mapmanager import MapManager
 from .player.user import User
 from .commands.clientcommands import CommandHandler
 from .commands.clientcommands import CommandHandler
+from .constants import CFG_PATH
+from .chat.messages import message_class_banned
 
 # =============================================================================
 # >> GLOBAL VARIABLES
 # =============================================================================
+player_config = ConfigObj(CFG_PATH + "/player_settings.ini")
+
 emit_sound_offset = 4 if os.name == "nt" else 5
 
 """ CEngineSoundServer::EmitSound(
@@ -172,6 +177,19 @@ def pre_player_team(event):
 def pre_building_healed(event):
     # TODO: engineer tower heal
     pass
+
+
+@PreEvent("player_changeclass")
+def pre_player_changeclass(event):
+    player = Player.from_userid(event["userid"])
+    human_player = UserManager.instance().user_from_index(player.index)
+    if human_player != None:
+        for ban in player_config["class_settings"].as_list("banned_classes"):
+            if f"{event['class']}" == ban:
+                player.set_property_uchar("m_PlayerClass.m_iClass", 1)
+                player.set_property_uchar("m_Shared.m_iDesiredPlayerClass", 1)
+                message_class_banned.send(player.index)
+                return EventAction.BLOCK
 
 
 @EntityPreHook(EntityCondition.is_player, "on_take_damage_alive")

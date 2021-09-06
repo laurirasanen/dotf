@@ -222,6 +222,19 @@ def pre_take_damage_alive_player(args):
         info.damage *= victim_player.class_settings.as_float("damage_take_mult")
 
 
+@EntityPreHook(EntityCondition.is_player, "get_max_health")
+def pre_get_max_health_player(args):
+    player = make_object(Player, args[0])
+
+    human_player = UserManager.instance().user_from_index(player.index)
+    if human_player != None:
+        return human_player.get_max_health()
+
+    bot_player = BotManager.instance().bot_from_index(player.index)
+    if bot_player != None:
+        return bot_player.get_max_health()
+
+
 # =============================================================================
 # >> HOOKS
 # =============================================================================

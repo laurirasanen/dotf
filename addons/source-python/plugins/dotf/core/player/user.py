@@ -45,13 +45,7 @@ class User:
         self.class_settings = player_config["class_settings"][
             f"{self.player.get_property_uchar('m_PlayerClass.m_iClass')}"
         ]
-        self.player.set_property_int(
-            "m_iMaxHealth", self.class_settings.as_int("health")
-        )
-        self.player.set_property_int("m_iHealth", self.class_settings.as_int("health"))
-        # TODO: m_iMaxHealth doesn't actually set max health in tf2.
-        # use https://github.com/FlaminSarge/tf2attributes ?
-        # TF2Attrib_SetByName(player, "max health additive bonus", health)
+        self.player.set_property_int("m_iHealth", self.get_max_health())
 
     def tick(self):
         if self.player.dead:
@@ -61,5 +55,10 @@ class User:
         if regen_interval > 0:
             if server.tick % regen_interval == 0:
                 regen = self.class_settings.as_int("regen")
-                if self.player.health < self.player.max_health and regen > 0:
+                if self.player.health < self.get_max_health() and regen > 0:
                     self.player.health += regen
+
+    def get_max_health(self):
+        base_health = self.class_settings.as_int("health")
+        bonus_health = 0  # TODO: more health per player level
+        return base_health + bonus_health

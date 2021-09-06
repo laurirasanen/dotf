@@ -254,8 +254,13 @@ def pre_take_damage_alive_player(args):
     victim = make_object(Player, args[0])
     attacker = None
 
+    # Default damage multiplier if we don't know what to do
+    default_mult = 0.2
+
     if info.attacker == 0:
         # World
+        info.base_damage *= default_mult
+        info.damage *= default_mult
         return
     else:
         # Some other entity
@@ -268,6 +273,8 @@ def pre_take_damage_alive_player(args):
                 attacker = Player.from_inthandle(owner_handle)
             except (ValueError, OverflowError):
                 # Not a player or invalid handle
+                info.base_damage *= default_mult
+                info.damage *= default_mult
                 return
 
     # Handle bot attacker

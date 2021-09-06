@@ -139,6 +139,10 @@ class Bot:
                     f"localdata.m_iAmmo.00{ammoType}", self.config.as_int("ammo")
                 )
 
+        # Don't allow overheal from medics
+        if self.bot.health > self.get_max_health():
+            self.bot.health = self.get_max_health()
+
     def tick_dead(self):
         bcmd = BotCmd()
         bcmd.reset()

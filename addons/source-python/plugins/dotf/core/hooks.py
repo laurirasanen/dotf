@@ -179,6 +179,62 @@ def pre_building_healed(event):
     pass
 
 
+@PreEvent("player_healed")
+def on_player_healed(event):
+    patient = Player.from_userid(event["patient"])
+    healer_idx = event["healer"]
+    healer = None
+
+    # Default heal multiplier if we don't know what to do
+    default_mult = 0.2
+
+    if healer_idx == 0:
+        # World or server
+        event["amount"] = int(event["amount"] * default_mult)
+        return EventAction.CONTINUE
+    else:
+        # Some other entity
+        try:
+            healer = Player.from_userid(healer_idx)
+        except ValueError:
+            # Not a player, try to get player from owner
+            try:
+                owner_handle = Entity(healer_idx).owner_handle
+                healer = Player.from_inthandle(owner_handle)
+            except (ValueError, OverflowError):
+                # Not a player or invalid handle
+                event["amount"] = int(event["amount"] * default_mult)
+                return EventAction.CONTINUE
+
+    heal_multiplier = 1.0
+
+    if healer != None:
+        # Handle player healer
+        player_healer = UserManager.instance().user_from_index(healer.index)
+        if player_healer != None:
+            heal_multiplier *= player_healer.class_settings.as_float("heal_deal_mult")
+
+        # Handle bot healer
+        bot_healer = BotManager.instance().bot_from_index(healer.index)
+        if bot_healer != None:
+            heal_multiplier *= 1.0
+
+    # Handle player patient
+    player_patient = UserManager.instance().user_from_index(patient.index)
+    if player_patient != None:
+        heal_multiplier *= player_patient.class_settings.as_float("heal_take_mult")
+
+    # Handle bot patient
+    bot_patient = BotManager.instance().bot_from_index(patient.index)
+    if bot_patient != None:
+        heal_multiplier *= 1.0
+
+    if heal_multiplier != 1.0:
+        event["amount"] = int(event["amount"] * heal_multiplier)
+
+    return EventAction.CONTINUE
+
+
 @PreEvent("player_changeclass")
 def pre_player_changeclass(event):
     player = Player.from_userid(event["userid"])

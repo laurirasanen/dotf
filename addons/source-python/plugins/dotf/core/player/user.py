@@ -58,6 +58,10 @@ class User:
                 if self.player.health < self.get_max_health() and regen > 0:
                     self.player.health += regen
 
+        # Don't allow overheal from medics
+        if self.player.health > self.get_max_health():
+            self.player.health = self.get_max_health()
+
     def get_max_health(self):
         base_health = self.class_settings.as_int("health")
         bonus_health = 0  # TODO: more health per player level

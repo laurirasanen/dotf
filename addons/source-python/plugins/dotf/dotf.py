@@ -22,6 +22,7 @@ from .core.commands.commands import register_commands
 from .core.player.usermanager import UserManager
 from .core.bot.botmanager import BotManager
 from .core.map.mapmanager import MapManager
+from .core.buildings.buildingmanager import BuildingManager
 
 # =============================================================================
 # >> GLOBAL VARIABLES
@@ -42,6 +43,7 @@ def load():
     register_commands()
     UserManager.instance().add_all()
     MapManager.instance().on_load_map()
+    BuildingManager.instance().add_all()
 
 
 def unload():

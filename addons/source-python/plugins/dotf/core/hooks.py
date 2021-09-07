@@ -19,6 +19,8 @@ import re
 from configobj import ConfigObj
 
 # Source.Python
+from core import PLATFORM
+from entities import entity
 from listeners import (
     OnTick,
     OnClientActive,
@@ -41,10 +43,12 @@ from engines.server import server, engine_server
 from engines.sound import engine_sound
 from memory import (
     DataType,
+    Pointer,
     Convention,
     get_object_pointer,
     get_virtual_function,
     make_object,
+    find_binary,
 )
 from memory.hooks import PreHook
 from messages.hooks import HookUserMessage
@@ -55,6 +59,7 @@ from weapons.entity import Weapon
 from .bot.botmanager import BotManager
 from .player.usermanager import UserManager
 from .map.mapmanager import MapManager
+from .buildings.buildingmanager import BuildingManager
 from .player.user import User
 from .commands.clientcommands import CommandHandler
 from .commands.clientcommands import CommandHandler
@@ -65,6 +70,20 @@ from .chat.messages import message_class_banned
 # >> GLOBAL VARIABLES
 # =============================================================================
 player_config = ConfigObj(CFG_PATH + "/player_settings.ini")
+
+server_binary = find_binary("tf/bin/server")
+
+if PLATFORM == "windows":
+    # Look for Building_Sentrygun strings in CObjectSentrygun::SentryRotate,
+    # same function has call to CObjectSentrygun::FindTarget and early return.
+    sentrygun_find_target_sig = b"\x55\x8B\xEC\x81\xEC\xC8\x00\x00\x00\x56\x57\x8B\xF9"
+else:
+    sentrygun_find_target_sig = "_ZN16CObjectSentrygun10FindTargetEv"
+
+# bool CObjectSentrygun::FindTarget()
+sentrygun_find_target = server_binary[sentrygun_find_target_sig].make_function(
+    Convention.THISCALL, (DataType.POINTER,), DataType.BOOL
+)
 
 emit_sound_offset = 4 if os.name == "nt" else 5
 
@@ -123,7 +142,9 @@ engine_sound.precache_sound("vo/null.wav")
 def on_level_init(level):
     """Called when a new map is loaded."""
     UserManager.instance().add_all()
+    # FIXME: this is too early?
     MapManager.instance().on_load_map()
+    BuildingManager.instance().add_all()
 
 
 @OnLevelEnd
@@ -131,6 +152,7 @@ def on_level_end():
     """Called when a map is unloaded."""
     UserManager.instance().clear()
     BotManager.instance().clear()
+    BuildingManager.instance().clear()
 
 
 @OnTick
@@ -138,6 +160,7 @@ def on_tick():
     """Called every engine tick."""
     BotManager.instance().tick()
     UserManager.instance().tick()
+    BuildingManager.instance().tick()
 
 
 @OnClientActive
@@ -177,6 +200,12 @@ def pre_player_team(event):
 def pre_building_healed(event):
     # TODO: engineer tower heal
     pass
+
+
+@PreEvent("object_destroyed")
+def pre_object_destroyed(event):
+    if event["was_building"]:
+        BuildingManager.instance().on_building_destroy(event["index"])
 
 
 @PreEvent("player_healed")
@@ -314,6 +343,18 @@ def pre_get_max_health_player(args):
     bot_player = BotManager.instance().bot_from_index(player.index)
     if bot_player != None:
         return bot_player.get_max_health()
+
+
+@PreHook(sentrygun_find_target)
+def pre_sentrygun_find_target(args):
+    # FIXME
+    # entity = make_object(Entity, int(args[0]))
+
+    # sentry = BuildingManager.instance().sentry_from_index(entity.index)
+    # if sentry != None:
+    #     sentry.set_range()
+    for sentry in BuildingManager.instance().sentries:
+        sentry.set_range()
 
 
 # =============================================================================

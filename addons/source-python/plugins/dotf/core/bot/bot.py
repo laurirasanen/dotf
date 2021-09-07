@@ -172,12 +172,15 @@ class Bot:
     def get_cmd(self, player_list):
         """Get BotCmd for move, aim direction, buttons, etc."""
 
-        move_action, attack_action, view_angles = self.get_action(player_list)
+        forward_move, side_move, attack_action, view_angles = self.get_action(
+            player_list
+        )
 
         bcmd = BotCmd()
         bcmd.reset()
 
-        bcmd.forward_move = self.move_speed * move_action
+        bcmd.forward_move = self.move_speed * forward_move
+        bcmd.side_move = self.move_speed * side_move
 
         if attack_action == 1:
             bcmd.buttons |= PlayerButtons.ATTACK
@@ -186,30 +189,6 @@ class Bot:
 
         for index in self.bot.weapon_indexes(classname=self.config["weapon"]):
             bcmd.weaponselect = index
-
-        # Avoid nearby friendly players and bots.
-        # Melee attacks will deal no damage if inside a friendly player...
-        closest_friendly = None
-        closest_dist = float("inf")
-        for player in player_list:
-            if player == self.bot:
-                continue
-            if player.team == self.bot.team:
-                dist = player.origin.get_distance(self.get_origin())
-                if dist < 24.0 and dist < closest_dist:
-                    closest_dist = dist
-                    closest_friendly = player
-
-        if closest_friendly != None:
-            left = Vector()
-            view_angles.get_angle_vectors(None, None, left)
-            to_closest = closest_friendly.origin - self.get_origin()
-            if left.dot(to_closest) < 0:
-                # closest friendly is on our right, move left
-                bcmd.side_move = -self.move_speed * 0.5
-            else:
-                # closest friendly is on our left, move right
-                bcmd.side_move = self.move_speed * 0.5
 
         return bcmd
 
@@ -227,14 +206,16 @@ class Bot:
 
     def get_action(self, player_list):
         # 1 = move forward
-        move_action = 0
+        forward_move = 0
+        # 1 = move right
+        side_move = 0
         # 1 = shoot
         attack_action = 0
         # direction to look
         view_angles = NULL_QANGLE
 
         if self.bot.dead:
-            return move_action, attack_action, view_angles
+            return forward_move, side_move, attack_action, view_angles
 
         move_target = self.get_origin()
 
@@ -270,9 +251,14 @@ class Bot:
         """
         self.aggro_target = None
         closest_dist = float("inf")
+        closest_friendly = None
+        closest_friendly_dist = float("inf")
         for p in player_list:
-            if p.dead == False and p.team != self.bot.team:
-                dist = p.origin.get_distance(self.get_origin())
+            if p.dead:
+                continue
+
+            dist = p.origin.get_distance(self.get_origin())
+            if p.team != self.bot.team:
                 if dist < closest_dist:
                     closest_dist = dist
                     if dist <= self.config.as_float("aggro_range"):
@@ -298,19 +284,38 @@ class Bot:
                         else:
                             self.aggro_target = p
 
+            else:
+                if p != self.bot:
+                    if dist < 24.0 and dist < closest_friendly_dist:
+                        closest_friendly_dist = dist
+                        closest_friendly = p
+
+        # Move away from friendlies
+        # (Melee attacks get absorbed)
+        if closest_friendly != None:
+            left = Vector()
+            view_angles.get_angle_vectors(None, None, left)
+            to_closest = closest_friendly.origin - self.get_origin()
+            if left.dot(to_closest) < 0:
+                # closest friendly is on our right, move left
+                side_move = -0.5
+            else:
+                # closest friendly is on our left, move right
+                side_move = 0.5
+
         # If have aggro, move towards aggro target if not in range, otherwise attack
         if self.aggro_target != None:
             dist = self.aggro_target.origin.get_distance(self.get_origin())
             if dist < self.config.as_float("attack_range"):
                 attack_action = 1
-                move_action = 0
+                forward_move = 0
                 # TODO: this stops working if target is too close,
                 # something wrong with get_distance?
                 if dist < self.config.as_float("attack_range_min"):
-                    move_action = -1
+                    forward_move = -1
             else:
                 attack_action = 0
-                move_action = 1
+                forward_move = 1
 
             # Face aggro
             target_center = self.aggro_target.origin
@@ -320,7 +325,7 @@ class Bot:
             direction = target_center - self.get_eye_pos()
             direction.get_vector_angles(Vector(0, 0, 1), view_angles)
 
-            return move_action, attack_action, view_angles
+            return forward_move, side_move, attack_action, view_angles
 
         # If no aggro, navigate along lane, or back to the lane if not on it
         lane_count = MapManager.instance().lane_count
@@ -398,6 +403,6 @@ class Bot:
         if to_move_target.length > move_margin:
             # Let's move
             to_move_target.get_vector_angles(Vector(0, 0, 1), view_angles)
-            move_action = 1
+            forward_move = 1
 
-        return move_action, attack_action, view_angles
+        return forward_move, side_move, attack_action, view_angles

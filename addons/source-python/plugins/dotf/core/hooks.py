@@ -280,12 +280,58 @@ def pre_player_changeclass(event):
 @EntityPreHook(EntityCondition.is_player, "on_take_damage_alive")
 def pre_take_damage_alive_player(args):
     info = make_object(TakeDamageInfo, args[1])
-    victim = make_object(Player, args[0])
-    attacker = None
+    victim = make_object(Entity, args[0])
 
     # Default damage multiplier if we don't know what to do
     default_mult = 0.2
 
+    if info.attacker == 0:
+        # World
+        info.base_damage *= default_mult
+        info.damage *= default_mult
+        return
+
+    # Handle bot attacker
+    attacker_bot = BotManager.instance().bot_from_index(info.attacker)
+    if attacker_bot != None:
+        info.base_damage = attacker_bot.config.as_float("damage")
+        info.damage = attacker_bot.config.as_float("damage")
+
+    # Handle player attacker
+    attacker_player = UserManager.instance().user_from_index(info.attacker)
+    if attacker_player != None:
+        info.base_damage *= attacker_player.class_settings.as_float("damage_deal_mult")
+        info.damage *= attacker_player.class_settings.as_float("damage_deal_mult")
+
+    # Handle sentry attacker
+    attacker_sentry = BuildingManager.instance().sentry_from_index(info.attacker)
+    if attacker_sentry != None:
+        info.base_damage = attacker_sentry.get_damage()
+        info.damage = attacker_sentry.get_damage()
+
+    # Handle bot victim
+    victim_bot = BotManager.instance().bot_from_index(victim.index)
+    if victim_bot != None:
+        # don't throw bots around
+        # FIXME
+        info.force = NULL_VECTOR
+
+    # Handle player victim
+    victim_player = UserManager.instance().user_from_index(victim.index)
+    if victim_player != None:
+        info.base_damage *= victim_player.class_settings.as_float("damage_take_mult")
+        info.damage *= victim_player.class_settings.as_float("damage_take_mult")
+
+
+@EntityPreHook(lambda ent: ent.classname == "obj_sentrygun", "on_take_damage")
+def pre_take_damage_sentry(args):
+    entity = make_object(Entity, args[0])
+    info = make_object(TakeDamageInfo, args[1])
+    attacker = None
+
+    default_mult = 0.2
+
+    # Get attacker
     if info.attacker == 0:
         # World
         info.base_damage *= default_mult
@@ -306,30 +352,23 @@ def pre_take_damage_alive_player(args):
                 info.damage *= default_mult
                 return
 
-    # Handle bot attacker
-    attacker_bot = BotManager.instance().bot_from_index(attacker.index)
-    if attacker_bot != None:
-        info.base_damage = attacker_bot.config.as_float("damage")
-        info.damage = attacker_bot.config.as_float("damage")
-
     # Handle player attacker
     attacker_player = UserManager.instance().user_from_index(attacker.index)
     if attacker_player != None:
         info.base_damage *= attacker_player.class_settings.as_float("damage_deal_mult")
         info.damage *= attacker_player.class_settings.as_float("damage_deal_mult")
 
-    # Handle bot victim
-    victim_bot = BotManager.instance().bot_from_index(victim.index)
-    if victim_bot != None:
-        # don't throw bots around
-        # FIXME
-        info.force = NULL_VECTOR
+    # Handle bot attacker
+    attacker_bot = BotManager.instance().bot_from_index(attacker.index)
+    if attacker_bot != None:
+        info.base_damage = attacker_bot.config.as_float("damage")
+        info.damage = attacker_bot.config.as_float("damage")
 
-    # Handle player victim
-    victim_player = UserManager.instance().user_from_index(victim.index)
-    if victim_player != None:
-        info.base_damage *= victim_player.class_settings.as_float("damage_take_mult")
-        info.damage *= victim_player.class_settings.as_float("damage_take_mult")
+    # Handle sentry victim
+    sentry = BuildingManager.instance().sentry_from_index(entity.index)
+    if sentry != None:
+        info.base_damage *= 1.0
+        info.damage *= 1.0
 
 
 @EntityPreHook(EntityCondition.is_player, "get_max_health")

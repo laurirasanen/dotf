@@ -72,5 +72,8 @@ class Sentry:
     def set_range(self):
         self.sentry_range.set_float(self.config.as_float("range"))
 
+    def get_damage(self):
+        return self.config.as_float("damage")
+
     def unregister(self):
         pass

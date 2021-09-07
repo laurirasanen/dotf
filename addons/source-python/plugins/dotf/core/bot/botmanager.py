@@ -24,6 +24,7 @@ class BotManager:
     __instance = None
 
     bots = []
+    max_bots = 22
 
     def instance():
         """Singleton instance"""
@@ -36,14 +37,26 @@ class BotManager:
             raise Exception("This class is a singleton, use .instance() access method.")
 
         self.bots = []
+        self.max_bots = 22
 
         BotManager.__instance = self
 
-    def add_bot(self, team, bot_type):
-        bot = Bot(team, bot_type)
-        print(f"[dotf] Register bot {bot.bot.name}, team: {team}, type: {bot_type}")
+    def add_bot(self):
+        if len(self.bots) >= self.max_bots:
+            print("[dotf] ERR: out of bots!")
+            return None
+
+        bot = Bot()
+        print(f"[dotf] Register bot {bot.bot.name}")
         self.bots.append(bot)
         return bot
+
+    def add_or_get_bot(self):
+        # Try to find an unreserved bot
+        for bot in self.bots:
+            if bot.reserved == False:
+                return bot
+        return self.add_bot()
 
     def remove_bot(self, bot):
         print(f"[dotf] Unregister bot {bot.bot.name}")

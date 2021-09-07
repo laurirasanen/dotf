@@ -42,40 +42,56 @@ bot_config = ConfigObj(CFG_PATH + "/bot_settings.ini")
 class Bot:
     """A controllable bot class"""
 
+    reserved = False
     spawned = False
     aggro_target = None
     config = None
 
-    def __init__(self, team=Team.BLU, bot_type=BotType.MELEE):
+    def __init__(self):
         """Create a new bot"""
 
+        self.reserved = False
         self.spawned = False
         self.aggro_target = None
         self.bot = None
         self.controller = None
+
+        self.bot_edict = bot_manager.create_bot("Bot")
+        if self.bot_edict == None:
+            raise ValueError("Failed to create a bot")
+
+        self.controller = bot_manager.get_bot_controller(self.bot_edict)
+        if self.controller == None:
+            raise ValueError("Failed to get bot controller")
+
+        self.bot = Player(index_from_edict(self.bot_edict))
+
+    def spawn(
+        self,
+        team=Team.BLU,
+        bot_type=BotType.MELEE,
+        origin=NULL_VECTOR,
+        rotation=NULL_QANGLE,
+    ):
+        self.reserved = True
         self.bot_type = bot_type
         self.team = team
+        self.aggro_target = None
+        self.spawn_origin = origin
+        self.spawn_rotation = rotation
+
+        # Settings we can apply before spawn
+        # TODO: move props to .ini ?
+        self.bot.team = self.team
+        self.bot.name = f"{'Blu' if team == Team.BLU else 'Red'} {'melee' if bot_type == BotType.MELEE else 'ranged'} bot"
+
         self.config = (
             bot_config["bot_melee"]
-            if bot_type == BotType.MELEE
+            if self.bot_type == BotType.MELEE
             else bot_config["bot_ranged"]
         )
         self.move_speed = self.config.as_float("move_speed")
 
-        bot_edict = bot_manager.create_bot(
-            f"{'Blu' if team == Team.BLU else 'Red'} {'melee' if bot_type == BotType.MELEE else 'ranged'} bot"
-        )
-        if bot_edict == None:
-            raise ValueError("Failed to create a bot")
-
-        self.controller = bot_manager.get_bot_controller(bot_edict)
-        if self.controller == None:
-            raise ValueError("Failed to get bot controller")
-
-        # Settings we can apply before spawn
-        # TODO: move props to .ini ?
-        self.bot = Player(index_from_edict(bot_edict))
-        self.bot.team = self.team
         self.bot.set_property_uchar(
             "m_PlayerClass.m_iClass", self.config.as_int("class")
         )
@@ -83,9 +99,6 @@ class Bot:
             "m_Shared.m_iDesiredPlayerClass", self.config.as_int("class")
         )
 
-    def spawn(self, origin=NULL_VECTOR, rotation=NULL_QANGLE):
-        self.spawn_origin = origin
-        self.spawn_rotation = rotation
         self.bot.spawn(force=True)
 
     def on_spawn(self):
@@ -108,8 +121,11 @@ class Bot:
         self.spawned = True
 
     def on_death(self):
+        self.reserved = False
         self.spawned = False
         self.aggro_target = None
+        # Prevent automatic respawn
+        self.bot.set_property_uchar("m_Shared.m_iDesiredPlayerClass", 0)
 
     def kick(self, reason=""):
         if self.bot != None:
@@ -124,7 +140,7 @@ class Bot:
         if self.bot == None or self.controller == None:
             return
 
-        if self.spawned == False or self.bot.dead:
+        if self.reserved and self.bot.dead:
             self.tick_dead()
             return
 
@@ -144,6 +160,7 @@ class Bot:
             self.bot.health = self.get_max_health()
 
     def tick_dead(self):
+        # Need to run cmds to respawn
         bcmd = BotCmd()
         bcmd.reset()
         self.controller.run_player_move(bcmd)

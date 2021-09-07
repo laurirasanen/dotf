@@ -27,6 +27,7 @@ from listeners import (
     OnClientDisconnect,
     OnLevelInit,
     OnLevelEnd,
+    OnServerActivate,
 )
 from entities import TakeDamageInfo
 from entities.hooks import EntityPreHook, EntityPostHook, EntityCondition
@@ -56,6 +57,7 @@ from filters.recipients import RecipientFilter
 from weapons.entity import Weapon
 
 # dotf
+from .game.gamemanager import GameManager
 from .bot.botmanager import BotManager
 from .player.usermanager import UserManager
 from .map.mapmanager import MapManager
@@ -138,13 +140,25 @@ engine_sound.precache_sound("vo/null.wav")
 # =============================================================================
 # >> LISTENERS
 # =============================================================================
+@OnServerActivate
+def on_server_activate(edicts, edict_count, max_clients):
+    """Called when a new map is loaded."""
+    UserManager.instance().clear()
+    BotManager.instance().clear()
+    BuildingManager.instance().clear()
+
+    print(f"max clients: {max_clients}")
+    BotManager.instance().max_bots = max_clients - 11
+
+    UserManager.instance().add_all()
+    MapManager.instance().on_load_map()
+    BuildingManager.instance().add_all()
+
+
 @OnLevelInit
 def on_level_init(level):
     """Called when a new map is loaded."""
-    UserManager.instance().add_all()
-    # FIXME: this is too early?
-    MapManager.instance().on_load_map()
-    BuildingManager.instance().add_all()
+    pass
 
 
 @OnLevelEnd
@@ -158,6 +172,7 @@ def on_level_end():
 @OnTick
 def on_tick():
     """Called every engine tick."""
+    GameManager.instance().tick()
     BotManager.instance().tick()
     UserManager.instance().tick()
     BuildingManager.instance().tick()

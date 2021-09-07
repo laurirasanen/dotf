@@ -44,7 +44,14 @@ class Sentry:
         self.register()
 
     def tick(self):
-        pass
+        # Refill ammo
+        if self.tier == 0:
+            self.entity.set_property_int("m_iAmmoShells", 150)
+        elif self.tier == 1:
+            self.entity.set_property_int("m_iAmmoShells", 200)
+        elif self.tier == 2:
+            self.entity.set_property_int("m_iAmmoShells", 200)
+            self.entity.set_property_int("m_iAmmoRockets", 20)
 
     def on_destroy(self):
         self.unregister()

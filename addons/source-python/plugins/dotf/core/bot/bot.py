@@ -19,7 +19,6 @@ from configobj import ConfigObj
 from engines.trace import engine_trace, Ray, ContentMasks, TraceFilterSimple, GameTrace
 from engines.server import server
 from entities.helpers import index_from_edict
-from filters.players import PlayerIter
 from mathlib import Vector, NULL_VECTOR, QAngle, NULL_QANGLE
 from players.bots import bot_manager, BotCmd
 from players.entity import Player
@@ -50,6 +49,7 @@ class Bot:
     def __init__(self):
         """Create a new bot"""
 
+        self.cached_origin = None
         self.reserved = False
         self.spawned = False
         self.aggro_target = None
@@ -106,9 +106,6 @@ class Bot:
         self.bot.set_noblock(True)
 
         self.bot.call_input("SetCustomModel", self.config["model"])
-        for weapon in self.bot.weapons():
-            if weapon.weapon_name != self.config["weapon"]:
-                weapon.remove()
 
         # TODO: move props to .ini ?
         self.bot.set_property_bool("m_PlayerClass.m_bUseClassAnimations", True)
@@ -116,6 +113,13 @@ class Bot:
             "m_flModelScale", float(self.config.as_float("model_scale"))
         )
         self.bot.set_property_int("m_iHealth", self.config.as_int("health"))
+
+        self.ammo_type = None
+        for weapon in self.bot.weapons():
+            if weapon.weapon_name != self.config["weapon"]:
+                weapon.remove()
+            else:
+                self.ammo_type = weapon.get_property_int("m_iPrimaryAmmoType")
 
         self.bot.teleport(self.spawn_origin, self.spawn_rotation)
         self.spawned = True
@@ -136,24 +140,24 @@ class Bot:
     def get_max_health(self):
         return self.config.as_int("health")
 
-    def tick(self):
+    def tick(self, player_list):
+        self.cached_origin = None
+
         if self.bot == None or self.controller == None:
             return
 
-        if self.reserved and self.bot.dead:
+        if self.reserved and not self.spawned:
             self.tick_dead()
             return
 
-        bcmd = self.get_cmd()
+        bcmd = self.get_cmd(player_list)
         self.controller.run_player_move(bcmd)
 
         # Refill ammo
-        if self.config.as_int("ammo") > 0:
-            if self.bot.active_weapon != None:
-                ammoType = self.bot.active_weapon.get_property_int("m_iPrimaryAmmoType")
-                self.bot.set_property_int(
-                    f"localdata.m_iAmmo.00{ammoType}", self.config.as_int("ammo")
-                )
+        if self.config.as_int("ammo") > 0 and self.ammo_type != None:
+            self.bot.set_property_int(
+                f"localdata.m_iAmmo.00{self.ammo_type}", self.config.as_int("ammo")
+            )
 
         # Don't allow overheal from medics
         if self.bot.health > self.get_max_health():
@@ -165,10 +169,10 @@ class Bot:
         bcmd.reset()
         self.controller.run_player_move(bcmd)
 
-    def get_cmd(self):
+    def get_cmd(self, player_list):
         """Get BotCmd for move, aim direction, buttons, etc."""
 
-        move_action, attack_action, view_angles = self.get_action()
+        move_action, attack_action, view_angles = self.get_action(player_list)
 
         bcmd = BotCmd()
         bcmd.reset()
@@ -187,7 +191,7 @@ class Bot:
         # Melee attacks will deal no damage if inside a friendly player...
         closest_friendly = None
         closest_dist = float("inf")
-        for player in PlayerIter():
+        for player in player_list:
             if player == self.bot:
                 continue
             if player.team == self.bot.team:
@@ -211,15 +215,17 @@ class Bot:
 
     def get_origin(self) -> Vector:
         if self.bot != None:
+            if self.cached_origin != None:
+                return self.cached_origin
             return self.bot.origin
         return NULL_VECTOR
 
     def get_eye_pos(self) -> Vector:
         if self.bot != None:
-            return self.bot.origin + self.bot.view_offset
+            return self.get_origin() + self.bot.view_offset
         return NULL_VECTOR
 
-    def get_action(self):
+    def get_action(self, player_list):
         # 1 = move forward
         move_action = 0
         # 1 = shoot
@@ -253,7 +259,7 @@ class Bot:
             # No prev target or invalid,
             # check for enemies in our range
             closest_dist = float("inf")
-            for p in PlayerIter():
+            for p in player_list:
                 if p.dead == False and p.team != self.bot.team:
                     dist = p.origin.get_distance(self.get_origin())
                     if dist < closest_dist:
@@ -264,7 +270,7 @@ class Bot:
         """
         self.aggro_target = None
         closest_dist = float("inf")
-        for p in PlayerIter():
+        for p in player_list:
             if p.dead == False and p.team != self.bot.team:
                 dist = p.origin.get_distance(self.get_origin())
                 if dist < closest_dist:
@@ -283,7 +289,7 @@ class Bot:
                                 ),
                             ),
                             ContentMasks.PLAYER_SOLID,
-                            TraceFilterSimple(PlayerIter()),
+                            TraceFilterSimple(player_list),
                             trace,
                         )
                         if trace.did_hit() and trace.entity.index == 0:

@@ -76,8 +76,14 @@ class BotManager:
         return None
 
     def tick(self):
+        # Calling PlayerIter multiple times for each bot
+        # murders the server...
+        players = []
+        for player in PlayerIter():
+            players.append(player)
+
         for bot in self.bots:
-            bot.tick()
+            bot.tick(players)
 
     def on_spawn(self, index):
         bot = self.bot_from_index(index)

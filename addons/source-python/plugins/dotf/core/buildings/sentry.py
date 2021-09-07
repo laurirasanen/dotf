@@ -50,6 +50,7 @@ class Sentry:
         self.unregister()
 
     def register(self):
+        # Get pointer to m_flSentryRange
         player_controlled = None
 
         for member in self.entity.server_class.find_server_class(
@@ -61,6 +62,12 @@ class Sentry:
         self.sentry_range = Pointer(
             self.entity.pointer + player_controlled.offset - 4,
         )
+
+        # Health
+        self.entity.call_input(
+            "SetHealth", self.config.as_int("health")
+        )  # m_flHealth and m_iHealth for buildings
+        self.entity.set_property_int("m_iMaxHealth", self.config.as_int("health"))
 
     def set_range(self):
         self.sentry_range.set_float(self.config.as_float("range"))

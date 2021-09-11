@@ -28,10 +28,12 @@ from listeners import (
     OnLevelInit,
     OnLevelEnd,
     OnServerActivate,
+    OnNetworkedEntitySpawned,
 )
 from entities import TakeDamageInfo
 from entities.hooks import EntityPreHook, EntityPostHook, EntityCondition
 from entities.entity import Entity
+from entities.helpers import baseentity_from_index
 from events import Event
 from events.hooks import PreEvent, EventAction
 from mathlib import NULL_VECTOR
@@ -79,15 +81,21 @@ if PLATFORM == "windows":
     # Look for Building_Sentrygun strings in CObjectSentrygun::SentryRotate,
     # same function has call to CObjectSentrygun::FindTarget and early return.
     sentrygun_find_target_sig = b"\x55\x8B\xEC\x81\xEC\xC8\x00\x00\x00\x56\x57\x8B\xF9"
+    emit_sound_offset = 4
+    next_bot_cc_spawn_offset = 22
+    next_bot_cc_set_model_offset = 24
+    event_killed_offset = 66
 else:
     sentrygun_find_target_sig = "_ZN16CObjectSentrygun10FindTargetEv"
+    emit_sound_offset = 5
+    next_bot_cc_spawn_offset = 22
+    next_bot_cc_set_model_offset = 25
+    event_killed_offset = 67
 
 # bool CObjectSentrygun::FindTarget()
 sentrygun_find_target = server_binary[sentrygun_find_target_sig].make_function(
     Convention.THISCALL, (DataType.POINTER,), DataType.BOOL
 )
-
-emit_sound_offset = 4 if os.name == "nt" else 5
 
 """ CEngineSoundServer::EmitSound(
         IRecipientFilter&,
@@ -193,6 +201,11 @@ def on_client_disconnect(index):
     user = UserManager.instance().user_from_index(index)
     if user != None:
         UserManager.instance().remove_user(user)
+
+
+@OnNetworkedEntitySpawned
+def on_networked_entity_spawned(entity):
+    print(f"networked_entity_spawned: {entity.classname}")
 
 
 # =============================================================================
@@ -430,6 +443,13 @@ def on_player_death(event):
     """Called when a player dies."""
     player = Player.from_userid(event["userid"])
     BotManager.instance().on_death(player.index)
+
+
+@Event("entity_killed")
+def on_entity_killed(event):
+    print("on_entity_killed")
+    entity = baseentity_from_index(event["entindex_killed"])
+    print(f"  classname: {entity.classname}")
 
 
 # =============================================================================

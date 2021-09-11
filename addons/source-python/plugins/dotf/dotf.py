@@ -39,6 +39,7 @@ def load():
     queue_command_string(f"exec source-python/dotf/dotf")
     # protected cvars, TODO move to .ini
     cvar.find_var("tf_dropped_weapon_lifetime").set_int(0)
+    cvar.find_var("nb_update_frequency").set_float(0.0152)
 
     register_commands()
     UserManager.instance().add_all()

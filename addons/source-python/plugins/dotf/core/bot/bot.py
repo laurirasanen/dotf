@@ -40,6 +40,9 @@ bot_config = ConfigObj(CFG_PATH + "/bot_settings.ini")
 # =============================================================================
 class Bot:
     """A controllable bot class"""
+    # TODO: look at tf_robot_destruction_robot / CTFRobotDestruction_Robot,
+    # or just CBaseCombatCharacter without Player.
+    # Default player class bot seems very laggy when full server and limited to maxplayers!
 
     reserved = False
     spawned = False

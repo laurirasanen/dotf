@@ -16,6 +16,7 @@
 from filters.entities import EntityIter
 
 # dotf
+from ..log import Logger
 
 
 class MapManager:
@@ -71,10 +72,10 @@ class MapManager:
 
         self.lane_nodes.sort(key=lambda node: node["index"])
 
-        print("[dotf] map loaded")
-        print(f"[dotf]   bot spawnpoints: {len(self.bot_spawn_points)}")
-        print(f"[dotf]   lane count: {self.lane_count}")
-        print(f"[dotf]   lane nodes: {len(self.lane_nodes)}")
+        Logger.instance().log_debug("map loaded")
+        Logger.instance().log_debug(f"  bot spawnpoints: {len(self.bot_spawn_points)}")
+        Logger.instance().log_debug(f"  lane count: {self.lane_count}")
+        Logger.instance().log_debug(f"  lane nodes: {len(self.lane_nodes)}")
 
     def get_spawn_points(self, team, lane):
         return [

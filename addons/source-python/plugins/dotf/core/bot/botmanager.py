@@ -18,6 +18,7 @@ from mathlib import NULL_VECTOR
 
 # dotf
 from .bot import Bot
+from ..log import Logger
 
 
 class BotManager:
@@ -43,11 +44,11 @@ class BotManager:
 
     def add_bot(self):
         if len(self.bots) >= self.max_bots:
-            print("[dotf] ERR: out of bots!")
+            Logger.instance().log_debug("ERR: out of bots!")
             return None
 
         bot = Bot()
-        print(f"[dotf] Register bot {bot.bot.name}")
+        Logger.instance().log_debug(f"Register bot {bot.bot.name}")
         self.bots.append(bot)
         return bot
 
@@ -59,12 +60,12 @@ class BotManager:
         return self.add_bot()
 
     def remove_bot(self, bot):
-        print(f"[dotf] Unregister bot {bot.bot.name}")
+        Logger.instance().log_debug(f"Unregister bot {bot.bot.name}")
         bot.bot.kick()
         self.bots.remove(bot)
 
     def clear(self):
-        print("[dotf] Clear bots")
+        Logger.instance().log_debug("Clear bots")
         for bot in self.bots:
             bot.bot.kick()
         self.bots.clear()

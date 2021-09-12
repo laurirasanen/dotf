@@ -69,6 +69,7 @@ from .commands.clientcommands import CommandHandler
 from .commands.clientcommands import CommandHandler
 from .constants import CFG_PATH
 from .chat.messages import message_class_banned
+from .log import Logger
 
 # =============================================================================
 # >> GLOBAL VARIABLES
@@ -80,17 +81,12 @@ server_binary = find_binary("tf/bin/server")
 if PLATFORM == "windows":
     # Look for Building_Sentrygun strings in CObjectSentrygun::SentryRotate,
     # same function has call to CObjectSentrygun::FindTarget and early return.
+    # TODO: move to sentry.py
     sentrygun_find_target_sig = b"\x55\x8B\xEC\x81\xEC\xC8\x00\x00\x00\x56\x57\x8B\xF9"
     emit_sound_offset = 4
-    next_bot_cc_spawn_offset = 22
-    next_bot_cc_set_model_offset = 24
-    event_killed_offset = 66
 else:
     sentrygun_find_target_sig = "_ZN16CObjectSentrygun10FindTargetEv"
     emit_sound_offset = 5
-    next_bot_cc_spawn_offset = 22
-    next_bot_cc_set_model_offset = 25
-    event_killed_offset = 67
 
 # bool CObjectSentrygun::FindTarget()
 sentrygun_find_target = server_binary[sentrygun_find_target_sig].make_function(
@@ -145,22 +141,40 @@ blocked_temp_entities = []
 
 engine_sound.precache_sound("vo/null.wav")
 
+
+def reset():
+    UserManager.instance().clear()
+    BotManager.instance().clear()
+    BuildingManager.instance().clear()
+
+
+def load():
+    UserManager.instance().add_all()
+    MapManager.instance().on_load_map()
+    BuildingManager.instance().add_all()
+
+
 # =============================================================================
 # >> LISTENERS
 # =============================================================================
 @OnServerActivate
 def on_server_activate(edicts, edict_count, max_clients):
     """Called when a new map is loaded."""
-    UserManager.instance().clear()
-    BotManager.instance().clear()
-    BuildingManager.instance().clear()
-
-    print(f"max clients: {max_clients}")
+    reset()
+    load()
+    Logger.instance().log_debug(f"max clients: {max_clients}")
     BotManager.instance().max_bots = max_clients - 11
 
-    UserManager.instance().add_all()
-    MapManager.instance().on_load_map()
-    BuildingManager.instance().add_all()
+
+@Event("round_end")
+def on_round_end(message, reason, winner):
+    reset()
+
+
+@Event("round_start")
+def on_round_start(fraglimit, objective, timelimit):
+    reset()
+    load()
 
 
 @OnLevelInit
@@ -172,9 +186,7 @@ def on_level_init(level):
 @OnLevelEnd
 def on_level_end():
     """Called when a map is unloaded."""
-    UserManager.instance().clear()
-    BotManager.instance().clear()
-    BuildingManager.instance().clear()
+    reset()
 
 
 @OnTick
@@ -203,9 +215,9 @@ def on_client_disconnect(index):
         UserManager.instance().remove_user(user)
 
 
-@OnNetworkedEntitySpawned
-def on_networked_entity_spawned(entity):
-    print(f"networked_entity_spawned: {entity.classname}")
+# @OnNetworkedEntitySpawned
+# def on_networked_entity_spawned(entity):
+#     Logger.instance().log_debug(f"networked_entity_spawned: {entity.classname}")
 
 
 # =============================================================================
@@ -447,9 +459,9 @@ def on_player_death(event):
 
 @Event("entity_killed")
 def on_entity_killed(event):
-    print("on_entity_killed")
+    Logger.instance().log_debug("on_entity_killed")
     entity = baseentity_from_index(event["entindex_killed"])
-    print(f"  classname: {entity.classname}")
+    Logger.instance().log_debug(f"  classname: {entity.classname}")
 
 
 # =============================================================================

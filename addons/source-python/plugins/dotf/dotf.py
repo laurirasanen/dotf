@@ -23,6 +23,7 @@ from .core.player.usermanager import UserManager
 from .core.bot.botmanager import BotManager
 from .core.map.mapmanager import MapManager
 from .core.buildings.buildingmanager import BuildingManager
+from .core.log import Logger
 
 # =============================================================================
 # >> GLOBAL VARIABLES
@@ -34,12 +35,12 @@ from .core.buildings.buildingmanager import BuildingManager
 # =============================================================================
 def load():
     """Called when Source.Python loads the plugin."""
-    print(f"[dotf] Loaded!")
+    Logger.instance().log_info("PLUGIN LOAD")
     # main server cfg
     queue_command_string(f"exec source-python/dotf/dotf")
     # protected cvars, TODO move to .ini
     cvar.find_var("tf_dropped_weapon_lifetime").set_int(0)
-    cvar.find_var("nb_update_frequency").set_float(0.0152)
+    cvar.find_var("nb_update_frequency").set_float(0.5)
 
     register_commands()
     UserManager.instance().add_all()
@@ -49,5 +50,5 @@ def load():
 
 def unload():
     """Called when Source.Python unloads the plugin."""
+    Logger.instance().log_info("PLUGIN UNLOAD")
     BotManager.instance().clear()  # kick bots
-    print(f"[dotf] Unloaded!")

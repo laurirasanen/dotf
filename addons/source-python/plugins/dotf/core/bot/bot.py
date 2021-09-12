@@ -40,6 +40,7 @@ bot_config = ConfigObj(CFG_PATH + "/bot_settings.ini")
 # =============================================================================
 class Bot:
     """A controllable bot class"""
+
     # TODO: look at tf_robot_destruction_robot / CTFRobotDestruction_Robot,
     # or just CBaseCombatCharacter without Player.
     # Default player class bot seems very laggy when full server and limited to maxplayers!
@@ -250,7 +251,7 @@ class Bot:
                         closest_dist = dist
                         if dist <= self.config.as_float("aggro_range"):
                             self.aggro_target = p
-                            print(f"{self.bot.name} aggro to {p.name}")
+                            Logger.instance().log_debug(f"{self.bot.name} aggro to {p.name}")
         """
         self.aggro_target = None
         closest_dist = float("inf")

@@ -21,6 +21,7 @@ from engines.server import server
 # dotf
 from ..constants import CFG_PATH
 from ..helpers.entity import dump_entity_attributes, dump_entity_properties
+from ..log import Logger
 
 # =============================================================================
 # >> GLOBAL VARIABLES
@@ -39,6 +40,9 @@ class User:
         ]
 
     def on_spawn(self):
+        if self.player.is_observer():
+            return
+        Logger.instance().log_debug(f"player {self.player.steamid} on_spawn")
         self.apply_class_settings()
 
     def apply_class_settings(self):
@@ -48,7 +52,7 @@ class User:
         self.player.set_property_int("m_iHealth", self.get_max_health())
 
     def tick(self):
-        if self.player.dead:
+        if self.player.dead or self.player.is_observer():
             return
 
         regen_interval = self.class_settings.as_int("regen_interval")

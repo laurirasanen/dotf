@@ -13,6 +13,7 @@
 # >> IMPORTS
 # =============================================================================
 # Source.Python
+from engines.trace import engine_trace, Ray, ContentMasks, TraceFilterSimple, GameTrace
 from engines.server import engine_server
 from engines.precache import Model
 from core import PLATFORM
@@ -33,6 +34,7 @@ from filters.players import PlayerIter
 
 # dotf
 from .locomotion import BaseBossLocomotion
+from ..log import Logger
 
 
 # =============================================================================
@@ -46,10 +48,34 @@ HEAVY_ROBOT_MODEL = "models/bots/heavy/bot_heavy.mdl"
 
 NBCC_VIRTUALS = (
     {
+        "name": "Deconstructor",
+        "index": 0,
+        "convention": Convention.THISCALL,
+        "args": (DataType.POINTER,),
+        "return": DataType.VOID,
+    },
+    {
         "name": "Spawn",
         "index": 22 if PLATFORM == "windows" else 23,
         "convention": Convention.THISCALL,
         "args": (DataType.POINTER,),
+        "return": DataType.VOID,
+    },
+    {
+        "name": "Think",
+        "index": 47 if PLATFORM == "windows" else 48,
+        "convention": Convention.THISCALL,
+        "args": (DataType.POINTER,),
+        "return": DataType.VOID,
+    },
+    {
+        "name": "Event_Killed",
+        "index": 66 if PLATFORM == "windows" else 67,
+        "convention": Convention.THISCALL,
+        "args": (
+            DataType.POINTER,
+            DataType.POINTER,
+        ),
         "return": DataType.VOID,
     },
 )
@@ -104,13 +130,13 @@ NBCC_MEMBERS = (
 class NextBotCombatCharacter(Entity):
     @staticmethod
     def create():
-        print("NBCC create")
+        Logger.instance().log_debug("NBCC create")
         entity = Entity.create(NBCC_CLASSNAME)
         entity.model = Model(HEAVY_ROBOT_MODEL, True, False)
         return NextBotCombatCharacter(entity.index, True)
 
     def __init__(self, index, caching=True):
-        print("NBCC __init__")
+        Logger.instance().log_debug("NBCC __init__")
         super().__init__(index, caching)
         self.virtuals = []
         self.locomotor = BaseBossLocomotion(
@@ -139,6 +165,7 @@ class NextBotCombatCharacter(Entity):
         # Create
         for virtual in NBCC_VIRTUALS:
             if virtual["name"] == name:
+                Logger.instance().log_debug(f"NBCC create virtual {name}")
                 func = get_object_pointer(self).make_virtual_function(
                     virtual["index"],
                     virtual["convention"],
@@ -160,10 +187,11 @@ class NextBotCombatCharacter(Entity):
     # >> VIRTUALS
     # =============================================================================
     def spawn(self, origin: Vector, angles: QAngle):
-        print("NBCC spawn")
+        Logger.instance().log_debug("NBCC spawn")
         self.origin = origin
         self.angles = angles
         self.set_property_float("m_flModelScale", 0.6)
+        self.set_property_int("m_iTeamNum", 2)
 
         # Spawn!
         self.get_virtual("Spawn").__call__(self)
@@ -176,16 +204,64 @@ class NextBotCombatCharacter(Entity):
         for member in NBCC_MEMBERS:
             pointer = self.get_member_pointer(member["name"])
             if member["type"] == "bool":
-                print(f"{member['name']}: {pointer.get_bool()}")
+                Logger.instance().log_debug(f"  {member['name']}: {pointer.get_bool()}")
             elif member["type"] == "int":
-                print(f"{member['name']}: {pointer.get_int()}")
+                Logger.instance().log_debug(f"  {member['name']}: {pointer.get_int()}")
             elif member["type"] == "float":
-                print(f"{member['name']}: {pointer.get_float()}")
+                Logger.instance().log_debug(
+                    f"  {member['name']}: {pointer.get_float()}"
+                )
             elif member["type"] == "pointer":
-                print(f"{member['name']}: {pointer.get_pointer()}")
+                Logger.instance().log_debug(
+                    f"  {member['name']}: {pointer.get_pointer()}"
+                )
 
-        target = NULL_VECTOR
+        # Setup hooks
+        self.get_virtual("Think").add_pre_hook(self.pre_think)
+        self.get_virtual("Event_Killed").add_pre_hook(self.pre_killed)
+        self.get_virtual("Deconstructor").add_pre_hook(self.pre_deconstructor)
+
+        # test
+        self.target_pos = Vector(0, 0, 0)
+
+    def pre_think(self, stack_data):
         for player in PlayerIter():
-            target = player.origin
+            trace = GameTrace()
+            engine_trace.trace_ray(
+                Ray(
+                    player.get_eye_location(),
+                    player.get_eye_location() + player.view_vector * 10000.0,
+                ),
+                ContentMasks.PLAYER_SOLID_BRUSH_ONLY,
+                TraceFilterSimple(PlayerIter()),
+                trace,
+            )
+            if trace.did_hit() and trace.entity.index == 0:
+                self.target_pos = trace.end_position
             break
-        self.locomotor.face_towards(target)
+
+        # self.locomotor.set_desired_speed(100.0)
+        self.locomotor.run()
+        self.locomotor.approach(self.target_pos, 0.1)
+        self.locomotor.face_towards(self.target_pos)
+        vel = self.get_property_vector("m_vecAbsVelocity")
+        if vel.is_zero() == False:
+            Logger.instance().log_debug(f"NBCC vel: {vel.x}, {vel.y}, {vel.z}")
+
+    def pre_killed(self, stack_data):
+        Logger.instance().log_debug(f"NBCC pre_killed")
+        self.locomotor.remove_hooks()
+        self.locomotor = None
+        self.remove_hooks()
+
+    def pre_deconstructor(self, stack_data):
+        # Trying to remove hooks here will crash.
+        # Just make sure we don't try to call any
+        # garbage pointers in Think after this point.
+        self.locomotor = None
+
+    def remove_hooks(self):
+        Logger.instance().log_debug(f"NBCC remove_hooks")
+        self.get_virtual("Think").remove_pre_hook(self.pre_think)
+        self.get_virtual("Event_Killed").remove_pre_hook(self.pre_killed)
+        # self.get_virtual("Deconstructor").remove_pre_hook(self.pre_deconstructor)

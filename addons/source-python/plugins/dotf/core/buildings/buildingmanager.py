@@ -19,6 +19,7 @@ from filters.entities import EntityIter
 
 # dotf
 from .sentry import Sentry
+from ..log import Logger
 
 
 class BuildingManager:
@@ -49,7 +50,7 @@ class BuildingManager:
         return sentry
 
     def remove_sentry(self, sentry):
-        print(f"[dotf] Unregister sentry {sentry.entity.target_name}")
+        Logger.instance().log_debug(f"Unregister sentry {sentry.entity.target_name}")
         sentry.unregister()
         self.sentries.remove(sentry)
 
@@ -60,7 +61,7 @@ class BuildingManager:
                     self.add_sentry(entity)
 
     def clear(self):
-        print("[dotf] Clear buildings")
+        Logger.instance().log_debug("Clear buildings")
         for sentry in self.sentries:
             sentry.unregister()
         self.sentries.clear()

@@ -10,6 +10,12 @@
 """
 
 # =============================================================================
+# >> IMPORTS
+# =============================================================================
+# dotf
+from ..log import Logger
+
+# =============================================================================
 # >> COMMAND HANDLER CLASS
 # =============================================================================
 class CommandHandler:
@@ -61,7 +67,7 @@ class CommandHandler:
             visibility,
         )
         self.command_list.append(command)
-        print(f"[dotf] Registered command: '{command.name}'")
+        Logger.instance().log_debug(f"Registered command: '{command.name}'")
 
     def execute_command(self, command, user, args):
         """Execute command if player has permissions."""

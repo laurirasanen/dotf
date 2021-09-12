@@ -17,6 +17,7 @@ from filters.players import PlayerIter
 
 # dotf
 from .user import User
+from ..log import Logger
 
 
 class UserManager:
@@ -39,15 +40,15 @@ class UserManager:
         UserManager.__instance = self
 
     def add_user(self, user):
-        print(f"[dotf] Register user {user.player.steamid}")
+        Logger.instance().log_debug(f"Register user {user.player.steamid}")
         self.users.append(user)
 
     def remove_user(self, user):
-        print(f"[dotf] Unregister user {user.player.steamid}")
+        Logger.instance().log_debug(f"Unregister user {user.player.steamid}")
         self.users.remove(user)
 
     def clear(self):
-        print("[dotf] Clear users")
+        Logger.instance().log_debug("Clear users")
         self.users.clear()
 
     def add_all(self):
@@ -55,7 +56,7 @@ class UserManager:
             if not p.is_bot():
                 user = User(p)
                 UserManager.instance().add_user(user)
-                if not p.dead:
+                if not p.dead and not p.is_observer():
                     user.apply_class_settings()
 
     def user_from_index(self, index):

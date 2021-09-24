@@ -28,17 +28,3 @@ sound/*
 !sound/source-python
 sound/source-python/*
 !sound/source-python/dotf
-
-# Custom offsets
-!addons/source-python/data
-addons/source-python/data/*
-!addons/source-python/data/source-python
-addons/source-python/data/source-python/*
-!addons/source-python/data/source-python/entities
-addons/source-python/data/source-python/entities/*
-!addons/source-python/data/source-python/entities/orangebox
-addons/source-python/data/source-python/entities/orangebox/*
-!addons/source-python/data/source-python/entities/orangebox/tf
-addons/source-python/data/source-python/entities/orangebox/tf/*
-
-!addons/source-python/data/source-python/entities/orangebox/tf/CBaseCombatCharacter.ini

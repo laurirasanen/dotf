@@ -19,6 +19,3 @@ robocopy /s /e ".\resource\source-python\events\dotf" "%dest%\resource\source-py
 :: sound
 rmdir /s /q "%dest%\sound\source-python\dotf"
 robocopy /s /e ".\sound\source-python\dotf" "%dest%\sound\source-python\dotf"
-
-:: offsets
-robocopy /is ".\addons\source-python\data\source-python\entities\orangebox\tf" "%dest%\addons\source-python\data\source-python\entities\orangebox\tf" "CBaseCombatCharacter.ini"

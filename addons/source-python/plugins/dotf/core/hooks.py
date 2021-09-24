@@ -84,9 +84,11 @@ if PLATFORM == "windows":
     # TODO: move to sentry.py
     sentrygun_find_target_sig = b"\x55\x8B\xEC\x81\xEC\xC8\x00\x00\x00\x56\x57\x8B\xF9"
     emit_sound_offset = 4
+    get_max_health_offset = 117
 else:
     sentrygun_find_target_sig = "_ZN16CObjectSentrygun10FindTargetEv"
     emit_sound_offset = 5
+    get_max_health_offset = 118
 
 # bool CObjectSentrygun::FindTarget()
 sentrygun_find_target = server_binary[sentrygun_find_target_sig].make_function(
@@ -411,7 +413,15 @@ def pre_take_damage_sentry(args):
         info.damage *= 1.0
 
 
-@EntityPreHook(EntityCondition.is_player, "get_max_health")
+@EntityPreHook(
+    EntityCondition.is_player,
+    lambda ent: get_object_pointer(ent).make_virtual_function(
+        get_max_health_offset,
+        Convention.THISCALL,
+        (DataType.POINTER,),
+        DataType.INT,
+    ),
+)
 def pre_get_max_health_player(args):
     player = make_object(Player, args[0])
 

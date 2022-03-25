@@ -22,6 +22,7 @@ from .clientcommands import CommandHandler, Argument
 from ..chat.messages import message_help, message_start
 from ..game.gamemanager import GameManager
 from ..nextbot.nextbot import NextBotCombatCharacter
+from ..helpers import Team
 
 
 # =============================================================================
@@ -40,6 +41,8 @@ def _start_handler(user, command):
 
 
 def _test_handler(user, command):
+    if command.args[0].value != Team.BLU and command.args[0].value != Team.RED:
+        return
     trace = GameTrace()
     engine_trace.trace_ray(
         Ray(
@@ -52,7 +55,7 @@ def _test_handler(user, command):
     )
     if trace.did_hit() and trace.entity.index == 0:
         bot = NextBotCombatCharacter.create()
-        bot.spawn(trace.end_position, user.player.angles)
+        bot.spawn(trace.end_position, user.player.angles, command.args[0].value)
 
 
 # =============================================================================
@@ -78,6 +81,5 @@ def register_commands():
     )
 
     CommandHandler.instance().add_command(
-        name="test",
-        callback=_test_handler,
+        name="test", callback=_test_handler, args=[Argument(int, True, 2)]
     )

@@ -13,8 +13,10 @@
 # >> IMPORTS
 # =============================================================================
 # Source.Python
+from inspect import stack
+from pprint import pprint
 from engines.trace import engine_trace, Ray, ContentMasks, TraceFilterSimple, GameTrace
-from engines.server import engine_server
+from engines.server import engine_server, server
 from engines.precache import Model
 from core import PLATFORM
 from entities.entity import Entity
@@ -34,7 +36,9 @@ from filters.players import PlayerIter
 
 # dotf
 from .locomotion import BaseBossLocomotion
+from .interface import NextBotInterface
 from ..log import Logger
+from ..helpers import get_closest_lane, closest_point_on_line, Team
 
 
 # =============================================================================
@@ -55,15 +59,15 @@ NBCC_VIRTUALS = (
         "return": DataType.VOID,
     },
     {
-        "name": "Spawn",
-        "index": 22 if PLATFORM == "windows" else 23,
+        "name": "GetBaseEntity",
+        "index": 5 if PLATFORM == "windows" else 6,
         "convention": Convention.THISCALL,
         "args": (DataType.POINTER,),
-        "return": DataType.VOID,
+        "return": DataType.POINTER,
     },
     {
-        "name": "Think",
-        "index": 47 if PLATFORM == "windows" else 48,
+        "name": "Spawn",
+        "index": 22 if PLATFORM == "windows" else 23,
         "convention": Convention.THISCALL,
         "args": (DataType.POINTER,),
         "return": DataType.VOID,
@@ -77,6 +81,13 @@ NBCC_VIRTUALS = (
             DataType.POINTER,
         ),
         "return": DataType.VOID,
+    },
+    {
+        "name": "MyNextBotPointer",
+        "index": 72 if PLATFORM == "windows" else 73,
+        "convention": Convention.THISCALL,
+        "args": (DataType.POINTER,),
+        "return": DataType.POINTER,
     },
 )
 
@@ -133,14 +144,17 @@ class NextBotCombatCharacter(Entity):
         Logger.instance().log_debug("NBCC create")
         entity = Entity.create(NBCC_CLASSNAME)
         entity.model = Model(HEAVY_ROBOT_MODEL, True, False)
-        return NextBotCombatCharacter(entity.index, True)
+        return NextBotCombatCharacter(entity.index)
 
-    def __init__(self, index, caching=True):
+    def __init__(self, index, caching=False):
         Logger.instance().log_debug("NBCC __init__")
         super().__init__(index, caching)
         self.virtuals = []
         self.locomotor = BaseBossLocomotion(
             self.get_member_pointer("m_locomotor").get_pointer()
+        )
+        self.interface = NextBotInterface(
+            self.get_virtual("MyNextBotPointer").__call__(self), self.update
         )
 
     def get_member_pointer(self, name):
@@ -186,19 +200,22 @@ class NextBotCombatCharacter(Entity):
     # =============================================================================
     # >> VIRTUALS
     # =============================================================================
-    def spawn(self, origin: Vector, angles: QAngle):
-        Logger.instance().log_debug("NBCC spawn")
+    def spawn(self, origin: Vector, angles: QAngle, team: Team):
         self.origin = origin
         self.angles = angles
+        self.team = team
+        Logger.instance().log_debug("NBCC spawn")
         self.set_property_float("m_flModelScale", 0.6)
-        self.set_property_int("m_iTeamNum", 2)
+        self.set_property_int("m_iTeamNum", self.team)
 
         # Spawn!
         self.get_virtual("Spawn").__call__(self)
 
         # health gets reset in Spawn
-        self.max_health = 1000
-        self.health = 1000
+        self.max_health = 100
+        self.health = 100
+
+        self.target_pos = origin
 
         # Test
         for member in NBCC_MEMBERS:
@@ -217,51 +234,41 @@ class NextBotCombatCharacter(Entity):
                 )
 
         # Setup hooks
-        self.get_virtual("Think").add_pre_hook(self.pre_think)
         self.get_virtual("Event_Killed").add_pre_hook(self.pre_killed)
-        self.get_virtual("Deconstructor").add_pre_hook(self.pre_deconstructor)
-
-        # test
-        self.target_pos = Vector(0, 0, 0)
-
-    def pre_think(self, stack_data):
-        for player in PlayerIter():
-            trace = GameTrace()
-            engine_trace.trace_ray(
-                Ray(
-                    player.get_eye_location(),
-                    player.get_eye_location() + player.view_vector * 10000.0,
-                ),
-                ContentMasks.PLAYER_SOLID_BRUSH_ONLY,
-                TraceFilterSimple(PlayerIter()),
-                trace,
-            )
-            if trace.did_hit() and trace.entity.index == 0:
-                self.target_pos = trace.end_position
-            break
-
-        # self.locomotor.set_desired_speed(100.0)
-        self.locomotor.run()
-        self.locomotor.approach(self.target_pos, 0.1)
-        self.locomotor.face_towards(self.target_pos)
-        vel = self.get_property_vector("m_vecAbsVelocity")
-        if vel.is_zero() == False:
-            Logger.instance().log_debug(f"NBCC vel: {vel.x}, {vel.y}, {vel.z}")
 
     def pre_killed(self, stack_data):
+        if stack_data[0].address != get_object_pointer(self).address:
+            return
+
         Logger.instance().log_debug(f"NBCC pre_killed")
         self.locomotor.remove_hooks()
         self.locomotor = None
+        self.interface.remove_hooks()
+        self.interface = None
         self.remove_hooks()
 
-    def pre_deconstructor(self, stack_data):
-        # Trying to remove hooks here will crash.
-        # Just make sure we don't try to call any
-        # garbage pointers in Think after this point.
-        self.locomotor = None
+    def update(self):
+        # Called right before INextBot::Update from interface.py.
+
+        # If no aggro, navigate along lane, or back to the lane if not on it
+        start, end = get_closest_lane(self.origin, self.team)
+        line = end - start
+
+        # Are we on the line?
+        closest_point = closest_point_on_line(start, end, self.origin)
+        margin = 32.0
+        if closest_point.get_distance(self.origin) > margin:
+            self.target_pos = closest_point
+        else:
+            # Overshoot end a bit to avoid weirdness if we're very close to it
+            self.target_pos = end + line.normalized() * 10.0
+
+        # self.locomotor.set_desired_speed(100.0)
+        self.get_member_pointer("m_speed").set_float(100.0)
+        self.locomotor.run()
+        self.locomotor.approach(self.target_pos, 0.1)
+        self.locomotor.face_towards(self.target_pos)
 
     def remove_hooks(self):
         Logger.instance().log_debug(f"NBCC remove_hooks")
-        self.get_virtual("Think").remove_pre_hook(self.pre_think)
         self.get_virtual("Event_Killed").remove_pre_hook(self.pre_killed)
-        # self.get_virtual("Deconstructor").remove_pre_hook(self.pre_deconstructor)

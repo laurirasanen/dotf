@@ -39,8 +39,10 @@ def load():
     # main server cfg
     queue_command_string(f"exec source-python/dotf/dotf")
     # protected cvars, TODO move to .ini
-    cvar.find_var("tf_dropped_weapon_lifetime").set_int(0)
+    cvar.find_var("tf_dropped_weapon_lifetime").set_float(0)
     cvar.find_var("nb_update_frequency").set_float(0.5)
+    cvar.find_var("nb_update_framelimit").set_float(15)
+    cvar.find_var("tf_base_boss_max_turn_rate").set_float(200)
 
     register_commands()
     UserManager.instance().add_all()

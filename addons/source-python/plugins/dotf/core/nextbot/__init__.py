@@ -1,0 +1,1 @@
+from .nextbot import NextBotCombatCharacter

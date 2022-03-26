@@ -63,20 +63,26 @@ class GameManager:
                 Team.BLU, lane_index
             )
             for point in blu_bot_spawns:
-                bot = BotManager.instance().add_or_get_bot()
+                bot = BotManager.instance().add_bot()
                 if bot != None:
                     bot.spawn(
-                        Team.BLU, point["bot_type"], point["origin"], point["rotation"]
+                        point["origin"],
+                        point["rotation"],
+                        Team.BLU
+                        # , point["bot_type"]
                     )
 
             red_bot_spawns = MapManager.instance().get_spawn_points(
                 Team.RED, lane_index
             )
             for point in red_bot_spawns:
-                bot = BotManager.instance().add_or_get_bot()
+                bot = BotManager.instance().add_bot()
                 if bot != None:
                     bot.spawn(
-                        Team.RED, point["bot_type"], point["origin"], point["rotation"]
+                        point["origin"],
+                        point["rotation"],
+                        Team.RED
+                        # , point["bot_type"]
                     )
 
     def tick(self):

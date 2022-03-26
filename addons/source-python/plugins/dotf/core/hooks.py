@@ -456,15 +456,15 @@ def on_player_spawn(event):
     cancel_wait.set_bool(True)
 
     player = Player.from_userid(event["userid"])
-    BotManager.instance().on_spawn(player.index)
+    #BotManager.instance().on_spawn(player.index)
     UserManager.instance().on_spawn(player.index)
 
 
-@Event("player_death")
-def on_player_death(event):
-    """Called when a player dies."""
-    player = Player.from_userid(event["userid"])
-    BotManager.instance().on_death(player.index)
+# @Event("player_death")
+# def on_player_death(event):
+#     """Called when a player dies."""
+#     player = Player.from_userid(event["userid"])
+#     BotManager.instance().on_death(player.index)
 
 
 @Event("entity_killed")

@@ -38,7 +38,7 @@ from filters.players import PlayerIter
 from .locomotion import BaseBossLocomotion
 from .interface import NextBotInterface
 from ..log import Logger
-from ..helpers import get_closest_lane, closest_point_on_line, Team
+from ..helpers import get_closest_lane, closest_point_on_line_segment, Team
 
 
 # =============================================================================
@@ -212,8 +212,8 @@ class NextBotCombatCharacter(Entity):
         self.get_virtual("Spawn").__call__(self)
 
         # health gets reset in Spawn
-        self.max_health = 100
-        self.health = 100
+        self.max_health = 1000
+        self.health = 1000
 
         self.target_pos = origin
 
@@ -241,10 +241,6 @@ class NextBotCombatCharacter(Entity):
             return
 
         Logger.instance().log_debug(f"NBCC pre_killed")
-        self.locomotor.remove_hooks()
-        self.locomotor = None
-        self.interface.remove_hooks()
-        self.interface = None
         self.remove_hooks()
 
     def update(self):
@@ -254,21 +250,26 @@ class NextBotCombatCharacter(Entity):
         start, end = get_closest_lane(self.origin, self.team)
         line = end - start
 
-        # Are we on the line?
-        closest_point = closest_point_on_line(start, end, self.origin)
+        closest_point = closest_point_on_line_segment(start, end, self.origin)
         margin = 32.0
+
+        # At least margin away from the lane, just move to closest point
         if closest_point.get_distance(self.origin) > margin:
             self.target_pos = closest_point
+        # We are on the lane, move towards end
         else:
-            # Overshoot end a bit to avoid weirdness if we're very close to it
             self.target_pos = end + line.normalized() * 10.0
 
-        # self.locomotor.set_desired_speed(100.0)
+        self.locomotor.set_desired_speed(100.0)
         self.get_member_pointer("m_speed").set_float(100.0)
-        self.locomotor.run()
+        # self.locomotor.run()
         self.locomotor.approach(self.target_pos, 0.1)
         self.locomotor.face_towards(self.target_pos)
 
     def remove_hooks(self):
         Logger.instance().log_debug(f"NBCC remove_hooks")
+        self.locomotor.remove_hooks()
+        self.locomotor = None
+        self.interface.remove_hooks()
+        self.interface = None
         self.get_virtual("Event_Killed").remove_pre_hook(self.pre_killed)

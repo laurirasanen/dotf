@@ -12,6 +12,9 @@
 # =============================================================================
 # >> IMPORTS
 # =============================================================================
+# Python
+from configobj import ConfigObj
+
 # Source.Python
 from inspect import stack
 from pprint import pprint
@@ -19,6 +22,7 @@ from engines.trace import engine_trace, Ray, ContentMasks, TraceFilterSimple, Ga
 from engines.server import engine_server, server
 from engines.precache import Model
 from core import PLATFORM
+from entities import TakeDamageInfo
 from entities.entity import Entity
 from memory import (
     DataType,
@@ -38,17 +42,18 @@ from filters.players import PlayerIter
 from .locomotion import BaseBossLocomotion
 from .interface import NextBotInterface
 from ..log import Logger
-from ..helpers import get_closest_lane, closest_point_on_line_segment, Team
+from ..helpers import get_closest_lane, closest_point_on_line_segment, Team, BotType
+from ..constants import CFG_PATH
 
 
 # =============================================================================
 # >> GLOBAL VARIABLES
 # =============================================================================
+bot_config = ConfigObj(CFG_PATH + "/bot_settings.ini")
+
 NBCC_CLASSNAME = "base_boss"
 NBCC_SERVER_CLASS = "CTFBaseBoss"
 ENTITY_IS_NBCC = lambda entity: entity.classname == NBCC_CLASSNAME
-
-HEAVY_ROBOT_MODEL = "models/bots/heavy/bot_heavy.mdl"
 
 NBCC_VIRTUALS = (
     {
@@ -70,6 +75,16 @@ NBCC_VIRTUALS = (
         "index": 22 if PLATFORM == "windows" else 23,
         "convention": Convention.THISCALL,
         "args": (DataType.POINTER,),
+        "return": DataType.VOID,
+    },
+    {
+        "name": "OnTakeDamage",
+        "index": 63 if PLATFORM == "windows" else 62,
+        "convention": Convention.THISCALL,
+        "args": (
+            DataType.POINTER,
+            DataType.POINTER,
+        ),
         "return": DataType.VOID,
     },
     {
@@ -143,7 +158,6 @@ class NextBotCombatCharacter(Entity):
     def create():
         Logger.instance().log_debug("NBCC create")
         entity = Entity.create(NBCC_CLASSNAME)
-        entity.model = Model(HEAVY_ROBOT_MODEL, True, False)
         return NextBotCombatCharacter(entity.index)
 
     def __init__(self, index, caching=False):
@@ -200,20 +214,29 @@ class NextBotCombatCharacter(Entity):
     # =============================================================================
     # >> VIRTUALS
     # =============================================================================
-    def spawn(self, origin: Vector, angles: QAngle, team: Team):
+    def spawn(self, origin: Vector, angles: QAngle, team: Team, bot_type: BotType):
         self.origin = origin
         self.angles = angles
         self.team = team
+        self.bot_type = bot_type
         Logger.instance().log_debug("NBCC spawn")
-        self.set_property_float("m_flModelScale", 0.6)
+
+        self.config = (
+            bot_config["bot_melee"]
+            if self.bot_type == BotType.MELEE
+            else bot_config["bot_ranged"]
+        )
+
+        self.model = Model(self.config["model"], True, False)
+        self.set_property_float("m_flModelScale", self.config.as_float("model_scale"))
         self.set_property_int("m_iTeamNum", self.team)
 
         # Spawn!
         self.get_virtual("Spawn").__call__(self)
 
         # health gets reset in Spawn
-        self.max_health = 1000
-        self.health = 1000
+        self.max_health = self.config.as_int("health")
+        self.health = self.config.as_int("health")
 
         self.target_pos = origin
 
@@ -235,6 +258,7 @@ class NextBotCombatCharacter(Entity):
 
         # Setup hooks
         self.get_virtual("Event_Killed").add_pre_hook(self.pre_killed)
+        self.get_virtual("OnTakeDamage").add_pre_hook(self.pre_take_damage)
 
     def pre_killed(self, stack_data):
         if stack_data[0].address != get_object_pointer(self).address:
@@ -242,6 +266,13 @@ class NextBotCombatCharacter(Entity):
 
         Logger.instance().log_debug(f"NBCC pre_killed")
         self.remove_hooks()
+
+    def pre_take_damage(self, stack_data):
+        if stack_data[0].address != get_object_pointer(self).address:
+            return
+
+        Logger.instance().log_debug(f"NBCC pre_take_damage")
+        pprint(make_object(TakeDamageInfo, stack_data[1]))
 
     def update(self):
         # Called right before INextBot::Update from interface.py.
@@ -260,16 +291,18 @@ class NextBotCombatCharacter(Entity):
         else:
             self.target_pos = end + line.normalized() * 10.0
 
-        self.locomotor.set_desired_speed(100.0)
-        self.get_member_pointer("m_speed").set_float(100.0)
-        # self.locomotor.run()
+        self.locomotor.set_desired_speed(self.config.as_float("move_speed"))
+        self.get_member_pointer("m_speed").set_float(self.config.as_float("move_speed"))
         self.locomotor.approach(self.target_pos, 0.1)
         self.locomotor.face_towards(self.target_pos)
 
     def remove_hooks(self):
         Logger.instance().log_debug(f"NBCC remove_hooks")
-        self.locomotor.remove_hooks()
-        self.locomotor = None
-        self.interface.remove_hooks()
-        self.interface = None
+        if self.locomotor is not None:
+            self.locomotor.remove_hooks()
+            self.locomotor = None
+        if self.interface is not None:
+            self.interface.remove_hooks()
+            self.interface = None
         self.get_virtual("Event_Killed").remove_pre_hook(self.pre_killed)
+        self.get_virtual("OnTakeDamage").remove_pre_hook(self.pre_take_damage)

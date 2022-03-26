@@ -28,6 +28,7 @@ from listeners import (
     OnLevelInit,
     OnLevelEnd,
     OnServerActivate,
+    OnEntitySpawned,
     OnNetworkedEntitySpawned,
 )
 from entities import TakeDamageInfo
@@ -144,39 +145,25 @@ blocked_temp_entities = []
 engine_sound.precache_sound("vo/null.wav")
 
 
-def reset():
-    UserManager.instance().clear()
-    BotManager.instance().clear()
-    BuildingManager.instance().clear()
-
-
-def load():
-    UserManager.instance().add_all()
-    MapManager.instance().on_load_map()
-    BuildingManager.instance().add_all()
-
-
 # =============================================================================
 # >> LISTENERS
 # =============================================================================
 @OnServerActivate
 def on_server_activate(edicts, edict_count, max_clients):
     """Called when a new map is loaded."""
-    reset()
-    load()
-    Logger.instance().log_debug(f"max clients: {max_clients}")
-    BotManager.instance().max_bots = max_clients - 11
+    GameManager.instance().reset()
+    GameManager.instance().load()
 
 
 @Event("round_end")
 def on_round_end(message, reason, winner):
-    reset()
+    GameManager.instance().reset()
 
 
 @Event("round_start")
 def on_round_start(fraglimit, objective, timelimit):
-    reset()
-    load()
+    GameManager.instance().reset()
+    GameManager.instance().load()
 
 
 @OnLevelInit
@@ -188,7 +175,7 @@ def on_level_init(level):
 @OnLevelEnd
 def on_level_end():
     """Called when a map is unloaded."""
-    reset()
+    GameManager.instance().reset()
 
 
 @OnTick
@@ -217,6 +204,11 @@ def on_client_disconnect(index):
         UserManager.instance().remove_user(user)
 
 
+# @OnEntitySpawned
+# def on_entity_spawned(entity):
+#     Logger.instance().log_debug(f"entity_spawned: {entity.classname}")
+
+
 # @OnNetworkedEntitySpawned
 # def on_networked_entity_spawned(entity):
 #     Logger.instance().log_debug(f"networked_entity_spawned: {entity.classname}")
@@ -240,7 +232,8 @@ def pre_player_team(event):
 
 @PreEvent("building_healed")
 def pre_building_healed(event):
-    # TODO: engineer tower heal
+    # TODO: engineer tower heal?
+    # blocked by m_bDisposableBuilding
     pass
 
 
@@ -319,58 +312,27 @@ def pre_player_changeclass(event):
                 return EventAction.BLOCK
 
 
-@EntityPreHook(EntityCondition.is_player, "on_take_damage_alive")
-def pre_take_damage_alive_player(args):
-    info = make_object(TakeDamageInfo, args[1])
-    victim = make_object(Entity, args[0])
-
-    # Default damage multiplier if we don't know what to do
-    default_mult = 0.2
-
-    if info.attacker == 0:
-        # World
-        info.base_damage *= default_mult
-        info.damage *= default_mult
-        return
-
-    # Handle bot attacker
-    attacker_bot = BotManager.instance().bot_from_index(info.attacker)
-    if attacker_bot != None:
-        info.base_damage = attacker_bot.config.as_float("damage")
-        info.damage = attacker_bot.config.as_float("damage")
-
-    # Handle player attacker
-    attacker_player = UserManager.instance().user_from_index(info.attacker)
-    if attacker_player != None:
-        info.base_damage *= attacker_player.class_settings.as_float("damage_deal_mult")
-        info.damage *= attacker_player.class_settings.as_float("damage_deal_mult")
-
-    # Handle sentry attacker
-    attacker_sentry = BuildingManager.instance().sentry_from_index(info.attacker)
-    if attacker_sentry != None:
-        info.base_damage = attacker_sentry.get_damage()
-        info.damage = attacker_sentry.get_damage()
-
-    # Handle bot victim
-    victim_bot = BotManager.instance().bot_from_index(victim.index)
-    if victim_bot != None:
-        # don't throw bots around
-        # FIXME
-        info.force = NULL_VECTOR
-
-    # Handle player victim
-    victim_player = UserManager.instance().user_from_index(victim.index)
-    if victim_player != None:
-        info.base_damage *= victim_player.class_settings.as_float("damage_take_mult")
-        info.damage *= victim_player.class_settings.as_float("damage_take_mult")
+@EntityPreHook(lambda ent: ent.classname == "base_boss", "on_take_damage")
+def pre_take_damage_bot(args):
+    pre_take_damage(args)
 
 
 @EntityPreHook(lambda ent: ent.classname == "obj_sentrygun", "on_take_damage")
 def pre_take_damage_sentry(args):
-    entity = make_object(Entity, args[0])
-    info = make_object(TakeDamageInfo, args[1])
-    attacker = None
+    pre_take_damage(args)
 
+
+@EntityPreHook(
+    # FIXME
+    # lambda ent: ent.classname in ["obj_sentrygun", "player", "base_boss"],
+    lambda ent: ent.classname == "player",
+    "on_take_damage",
+)
+def pre_take_damage(args):
+    victim = make_object(Entity, args[0])
+    info = make_object(TakeDamageInfo, args[1])
+
+    # Default damage multiplier if we don't know what to do
     default_mult = 0.2
 
     # Get attacker
@@ -379,38 +341,49 @@ def pre_take_damage_sentry(args):
         info.base_damage *= default_mult
         info.damage *= default_mult
         return
-    else:
-        # Some other entity
+    elif info.inflictor > 0:
         try:
-            attacker = Player.from_userid(userid_from_index(info.attacker))
-        except ValueError:
-            # Not a player, try to get player from owner
+            # Owner
+            owner_handle = Entity(info.inflictor).owner_handle
+
+            # Level 3 sentry rockets need to get owner twice
+            # rocket -> sentry -> player
             try:
-                owner_handle = Entity(info.inflictor).owner_handle
-                attacker = Player.from_inthandle(owner_handle)
+                second_owner_handle = Entity.from_inthandle(owner_handle).owner_handle
+                owner_handle = second_owner_handle
             except (ValueError, OverflowError):
-                # Not a player or invalid handle
-                info.base_damage *= default_mult
-                info.damage *= default_mult
-                return
+                pass
 
-    # Handle player attacker
-    attacker_player = UserManager.instance().user_from_index(attacker.index)
-    if attacker_player != None:
-        info.base_damage *= attacker_player.class_settings.as_float("damage_deal_mult")
-        info.damage *= attacker_player.class_settings.as_float("damage_deal_mult")
+            attacker = Entity.from_inthandle(owner_handle)
+            info.attacker = attacker.index
+        except (ValueError, OverflowError):
+            pass
 
-    # Handle bot attacker
-    attacker_bot = BotManager.instance().bot_from_index(attacker.index)
+    # Handle attacker
+    attacker_bot = BotManager.instance().bot_from_index(info.attacker)
+    attacker_player = UserManager.instance().user_from_index(info.attacker)
+    attacker_sentry = BuildingManager.instance().sentry_from_index(info.attacker)
+
     if attacker_bot != None:
         info.base_damage = attacker_bot.config.as_float("damage")
         info.damage = attacker_bot.config.as_float("damage")
+    elif attacker_player != None:
+        info.base_damage *= attacker_player.class_settings.as_float("damage_deal_mult")
+        info.damage *= attacker_player.class_settings.as_float("damage_deal_mult")
+    elif attacker_sentry != None:
+        info.base_damage = attacker_sentry.get_damage()
+        info.damage = attacker_sentry.get_damage()
 
-    # Handle sentry victim
-    sentry = BuildingManager.instance().sentry_from_index(entity.index)
-    if sentry != None:
-        info.base_damage *= 1.0
-        info.damage *= 1.0
+    # Handle victim
+    victim_player = UserManager.instance().user_from_index(victim.index)
+
+    if victim_player != None:
+        info.base_damage *= victim_player.class_settings.as_float("damage_take_mult")
+        info.damage *= victim_player.class_settings.as_float("damage_take_mult")
+
+    # print(
+    #     f"ab: {attacker_bot}, ap: {attacker_player}, as: {attacker_sentry}, vp: {victim_player}"
+    # )
 
 
 @EntityPreHook(
@@ -456,7 +429,7 @@ def on_player_spawn(event):
     cancel_wait.set_bool(True)
 
     player = Player.from_userid(event["userid"])
-    #BotManager.instance().on_spawn(player.index)
+    # BotManager.instance().on_spawn(player.index)
     UserManager.instance().on_spawn(player.index)
 
 

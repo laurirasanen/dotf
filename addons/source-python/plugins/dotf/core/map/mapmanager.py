@@ -72,7 +72,7 @@ class MapManager:
                     "tier": int(parts[2]),
                     "rotation": point.rotation,
                 }
-                self.bot_spawn_points.append(spawn)
+                self.sentry_spawn_points.append(spawn)
             elif point.target_name.startswith("dotf_bot_spawn_point"):
                 parts = point.target_name.split("_")[4:]
                 spawn = {

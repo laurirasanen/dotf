@@ -164,6 +164,8 @@ class BaseBossLocomotion(Pointer):
     # >> VIRTUALS
     # =============================================================================
     def pre_update(self, stack_data):
+        if stack_data[0].address != self.address:
+            return
         # Logger.instance().log_debug(f"LOCO pre_update")
         foo = 1  # pass cancels function call
 

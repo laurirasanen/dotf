@@ -13,19 +13,18 @@
 # >> IMPORTS
 # =============================================================================
 # Source.Python
+from engines.server import queue_command_string
 from filters.players import PlayerIter
 from mathlib import NULL_VECTOR
 
 # dotf
 from .bot import Bot
+from ..nextbot import NextBotCombatCharacter
 from ..log import Logger
 
 
 class BotManager:
     __instance = None
-
-    bots = []
-    max_bots = 22
 
     def instance():
         """Singleton instance"""
@@ -38,7 +37,7 @@ class BotManager:
             raise Exception("This class is a singleton, use .instance() access method.")
 
         self.bots = []
-        self.max_bots = 22
+        self.max_bots = 60
 
         BotManager.__instance = self
 
@@ -47,51 +46,27 @@ class BotManager:
             Logger.instance().log_debug("ERR: out of bots!")
             return None
 
-        bot = Bot()
-        Logger.instance().log_debug(f"Register bot {bot.bot.name}")
+        bot = NextBotCombatCharacter.create()
+        # Logger.instance().log_debug(f"Register bot {bot.name}")
         self.bots.append(bot)
         return bot
 
-    def add_or_get_bot(self):
-        # Try to find an unreserved bot
-        for bot in self.bots:
-            if bot.reserved == False:
-                return bot
-        return self.add_bot()
-
-    def remove_bot(self, bot):
-        Logger.instance().log_debug(f"Unregister bot {bot.bot.name}")
-        bot.bot.kick()
+    def remove_bot(self, bot, kill=False):
+        # Logger.instance().log_debug(f"Unregister bot {bot.name}")
         self.bots.remove(bot)
 
     def clear(self):
         Logger.instance().log_debug("Clear bots")
         for bot in self.bots:
-            bot.bot.kick()
+            bot.remove_hooks()
         self.bots.clear()
+        queue_command_string("nb_delete_all")
 
     def bot_from_index(self, index):
         for bot in self.bots:
-            if bot.bot.index == index:
+            if bot.index == index:
                 return bot
         return None
 
     def tick(self):
-        # Calling PlayerIter multiple times for each bot
-        # murders the server...
-        players = []
-        for player in PlayerIter():
-            players.append(player)
-
-        for bot in self.bots:
-            bot.tick(players)
-
-    def on_spawn(self, index):
-        bot = self.bot_from_index(index)
-        if bot != None:
-            bot.on_spawn()
-
-    def on_death(self, index):
-        bot = self.bot_from_index(index)
-        if bot != None:
-            bot.on_death()
+        pass

@@ -53,6 +53,7 @@ bot_config = ConfigObj(CFG_PATH + "/bot_settings.ini")
 
 NBCC_CLASSNAME = "base_boss"
 NBCC_SERVER_CLASS = "CTFBaseBoss"
+BA_SERVER_CLASS = "CBaseAnimating"
 ENTITY_IS_NBCC = lambda entity: entity.classname == NBCC_CLASSNAME
 
 NBCC_VIRTUALS = (
@@ -75,6 +76,16 @@ NBCC_VIRTUALS = (
         "index": 22 if PLATFORM == "windows" else 23,
         "convention": Convention.THISCALL,
         "args": (DataType.POINTER,),
+        "return": DataType.VOID,
+    },
+    {
+        "name": "SetModel",
+        "index": 24 if PLATFORM == "windows" else 25,
+        "convention": Convention.THISCALL,
+        "args": (
+            DataType.POINTER,
+            DataType.STRING,
+        ),
         "return": DataType.VOID,
     },
     {
@@ -104,51 +115,134 @@ NBCC_VIRTUALS = (
         "args": (DataType.POINTER,),
         "return": DataType.POINTER,
     },
+    {
+        "name": "SetSequence",
+        "index": 195 if PLATFORM == "windows" else 196,
+        "convention": Convention.THISCALL,
+        "args": (
+            DataType.POINTER,
+            DataType.INT,
+        ),
+        "return": DataType.POINTER,
+    },
+    {
+        "name": "LookupSequence",
+        "signature": ""
+        if PLATFORM == "windows"
+        else "_ZN14CBaseAnimating14LookupSequenceEPKc",
+        "convention": Convention.THISCALL,
+        "args": (
+            DataType.POINTER,
+            DataType.STRING,
+        ),
+        "return": DataType.INT,
+    },
+    {
+        "name": "ResetSequence",
+        "signature": ""
+        if PLATFORM == "windows"
+        else "_ZN14CBaseAnimating13ResetSequenceEi",
+        "convention": Convention.THISCALL,
+        "args": (
+            DataType.POINTER,
+            DataType.INT,
+        ),
+        "return": DataType.VOID,
+    },
+    {
+        "name": "LookupPoseParameter",
+        "signature": ""
+        if PLATFORM == "windows"
+        else "_ZN14CBaseAnimating19LookupPoseParameterEP10CStudioHdrPKc",
+        "convention": Convention.THISCALL,
+        "args": (
+            DataType.POINTER,
+            DataType.POINTER,
+            DataType.STRING,
+        ),
+        "return": DataType.INT,
+    },
+    # {
+    #     "name": "SetPoseParameter",
+    #     "signature": ""
+    #     if PLATFORM == "windows"
+    #     else "_ZN14CBaseAnimating16SetPoseParameterEP10CStudioHdrif",
+    #     "convention": Convention.THISCALL,
+    #     "args": (
+    #         DataType.POINTER,
+    #         DataType.POINTER,
+    #         DataType.INT,
+    #         DataType.FLOAT,
+    #     ),
+    #     "return": DataType.FLOAT,
+    # },
+    {
+        "name": "SetPoseParameter",
+        "signature": ""
+        if PLATFORM == "windows"
+        else "_ZN14CBaseAnimating16SetPoseParameterEP10CStudioHdrPKcf",
+        "convention": Convention.THISCALL,
+        "args": (
+            DataType.POINTER,
+            DataType.POINTER,
+            DataType.STRING,
+            DataType.FLOAT,
+        ),
+        "return": DataType.FLOAT,
+    },
+    {
+        "name": "LockStudioHdr",
+        "signature": ""
+        if PLATFORM == "windows"
+        else "_ZN14CBaseAnimating13LockStudioHdrEv",
+        "convention": Convention.THISCALL,
+        "args": (DataType.POINTER,),
+        "return": DataType.VOID,
+    },
 )
 
 # Non-networked members relative to a CNetworkVar pointer
 NBCC_MEMBERS = (
     {
         "name": "m_speed",
-        "type": "float",
         "relative": "m_lastHealthPercentage",
         "offset": 8,
     },
     {
         "name": "m_startDisabled",
-        "type": "int",
         "relative": "m_lastHealthPercentage",
         "offset": 12,
     },
     {
         "name": "m_isEnabled",
-        "type": "bool",
         "relative": "m_lastHealthPercentage",
         "offset": 16,
     },
     {
         "name": "m_damagePoseParameter",
-        "type": "int",
         "relative": "m_lastHealthPercentage",
         "offset": 20,
     },
     {
         "name": "m_currencyValue",
-        "type": "int",
         "relative": "m_lastHealthPercentage",
         "offset": 24,
     },
     {
         "name": "m_bResolvePlayerCollisions",
-        "type": "bool",
         "relative": "m_lastHealthPercentage",
         "offset": 28,
     },
     {
         "name": "m_locomotor",
-        "type": "pointer",
         "relative": "m_lastHealthPercentage",
         "offset": 32,
+    },
+    {
+        "name": "m_pStudioHdr",
+        "relative": "m_flFadeScale",
+        "offset": 8,
+        "server_class": BA_SERVER_CLASS,
     },
 )
 
@@ -174,9 +268,10 @@ class NextBotCombatCharacter(Entity):
     def get_member_pointer(self, name):
         for member in NBCC_MEMBERS:
             if member["name"] == name:
-                for networked in self.server_class.find_server_class(
-                    NBCC_SERVER_CLASS
-                ).table:
+                sc = NBCC_SERVER_CLASS
+                if "server_class" in member:
+                    sc = member["server_class"]
+                for networked in self.server_class.find_server_class(sc).table:
                     if networked.name == member["relative"]:
                         return Pointer(
                             self.pointer + networked.offset + member["offset"]
@@ -193,22 +288,44 @@ class NextBotCombatCharacter(Entity):
         # Create
         for virtual in NBCC_VIRTUALS:
             if virtual["name"] == name:
-                Logger.instance().log_debug(f"NBCC create virtual {name}")
-                func = get_object_pointer(self).make_virtual_function(
-                    virtual["index"],
-                    virtual["convention"],
-                    virtual["args"],
-                    virtual["return"],
-                )
-                self.virtuals.append(
-                    {
-                        "name": name,
-                        "func": func,
-                    }
-                )
-                return func
+                if "index" in virtual:
+                    Logger.instance().log_debug(f"NBCC create virtual function {name}")
+                    func = get_object_pointer(self).make_virtual_function(
+                        virtual["index"],
+                        virtual["convention"],
+                        virtual["args"],
+                        virtual["return"],
+                    )
+                    self.virtuals.append(
+                        {
+                            "name": name,
+                            "func": func,
+                        }
+                    )
+                    return func
+                elif "signature" in virtual:
+                    Logger.instance().log_debug(
+                        f"NBCC create non-virtual function {name}"
+                    )
+                    binary = find_binary("server_srv", False)
+                    print(f"binary: {binary}")
+                    address = binary.find_address(virtual["signature"])
+                    print(f"address: {address}")
+                    func = address.make_function(
+                        virtual["convention"],
+                        virtual["args"],
+                        virtual["return"],
+                    )
+                    self.virtuals.append(
+                        {
+                            "name": name,
+                            "func": func,
+                        }
+                    )
+                    return func
 
         # Invalid
+        Logger.instance().log_debug(f"NBCC function {name} not found")
         return None
 
     # =============================================================================
@@ -219,6 +336,7 @@ class NextBotCombatCharacter(Entity):
         self.angles = angles
         self.team = team
         self.bot_type = bot_type
+        self.target_pos = origin
         Logger.instance().log_debug("NBCC spawn")
 
         self.config = (
@@ -227,7 +345,11 @@ class NextBotCombatCharacter(Entity):
             else bot_config["bot_ranged"]
         )
 
-        self.model = Model(self.config["model"], True, False)
+        tmp = Model(self.config["model"], True, False)  # precache
+        # needed instead of self.model = Model?
+        self.get_virtual("SetModel").__call__(self, self.config["model"])
+        # self.get_virtual("LockStudioHdr").__call__(self)
+
         self.set_property_float("m_flModelScale", self.config.as_float("model_scale"))
         self.set_property_int("m_iTeamNum", self.team)
         self.set_property_int(
@@ -244,27 +366,51 @@ class NextBotCombatCharacter(Entity):
         self.max_health = self.config.as_int("health")
         self.health = self.config.as_int("health")
 
-        self.target_pos = origin
-
-        # Test
-        for member in NBCC_MEMBERS:
-            pointer = self.get_member_pointer(member["name"])
-            if member["type"] == "bool":
-                Logger.instance().log_debug(f"  {member['name']}: {pointer.get_bool()}")
-            elif member["type"] == "int":
-                Logger.instance().log_debug(f"  {member['name']}: {pointer.get_int()}")
-            elif member["type"] == "float":
-                Logger.instance().log_debug(
-                    f"  {member['name']}: {pointer.get_float()}"
-                )
-            elif member["type"] == "pointer":
-                Logger.instance().log_debug(
-                    f"  {member['name']}: {pointer.get_pointer()}"
-                )
+        self.play_animation(self.config["model_anim_move"])
+        self.set_pose_param("move_x", 1.0)
 
         # Setup hooks
         self.get_virtual("Event_Killed").add_pre_hook(self.pre_killed)
         self.get_virtual("OnTakeDamage").add_pre_hook(self.pre_take_damage)
+
+    def play_animation(self, anim):
+        seq = self.get_virtual("LookupSequence").__call__(self, anim)
+        self.get_virtual("ResetSequence").__call__(self, seq)
+        self.set_property_float("m_flPlaybackRate", 1.0)
+
+    def get_studio_model_ptr(self):
+        studio_model = self.get_member_pointer("m_pStudioHdr")
+        if studio_model is None:
+            Logger.instance().log_debug(f"No studio model")
+            return
+
+        return studio_model.get_pointer()
+
+    def set_pose_param(self, param, value):
+        model_ptr = self.get_studio_model_ptr()
+        if model_ptr is None:
+            return
+
+        # print(f"model_ptr ad1: {model_ptr.address}")
+
+        if model_ptr.address == 0:
+            # Lock updates m_pStudioHdr from cache
+            self.get_virtual("LockStudioHdr").__call__(self)
+            model_ptr = self.get_studio_model_ptr()
+
+        # FIXME: still null here, something in LockStudioHdr failing?
+        if model_ptr.address == 0:
+            Logger.instance().log_debug(f"m_pStudioHdr is null")
+            return
+
+        # print(f"model_ptr ad2: {model_ptr.address}")
+        # pose = self.get_virtual("LookupPoseParameter").__call__(self, model_ptr, param)
+        # if pose < 0:
+        #     Logger.instance().log_debug(f"No pose parameter {param}")
+        #     return
+        # print(f"poseparam {param} id: {pose}")
+
+        self.get_virtual("SetPoseParameter").__call__(self, model_ptr, param, value)
 
     def pre_killed(self, stack_data):
         if stack_data[0].address != get_object_pointer(self).address:

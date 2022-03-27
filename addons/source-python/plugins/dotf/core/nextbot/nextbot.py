@@ -230,6 +230,12 @@ class NextBotCombatCharacter(Entity):
         self.model = Model(self.config["model"], True, False)
         self.set_property_float("m_flModelScale", self.config.as_float("model_scale"))
         self.set_property_int("m_iTeamNum", self.team)
+        self.set_property_int(
+            "m_nSkin",
+            self.config.as_int("model_skin_blu")
+            if self.team == Team.BLU
+            else self.config.as_int("model_skin_red"),
+        )
 
         # Spawn!
         self.get_virtual("Spawn").__call__(self)

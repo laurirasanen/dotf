@@ -55,6 +55,11 @@ class BotManager:
         # Logger.instance().log_debug(f"Unregister bot {bot.name}")
         self.bots.remove(bot)
 
+    def remove_bot_index(self, index):
+        for bot in self.bots:
+            if bot.index == index:
+                self.bots.remove(bot)
+
     def clear(self):
         Logger.instance().log_debug("Clear bots")
         for bot in self.bots:

@@ -30,6 +30,7 @@ from listeners import (
     OnServerActivate,
     OnEntitySpawned,
     OnNetworkedEntitySpawned,
+    OnEntityDeleted,
 )
 from entities import TakeDamageInfo
 from entities.hooks import EntityPreHook, EntityPostHook, EntityCondition
@@ -212,6 +213,12 @@ def on_client_disconnect(index):
 # @OnNetworkedEntitySpawned
 # def on_networked_entity_spawned(entity):
 #     Logger.instance().log_debug(f"networked_entity_spawned: {entity.classname}")
+
+
+@OnEntityDeleted
+def on_entity_spawned(entity):
+    # Logger.instance().log_debug(f"entity_deleted: {entity.classname}")
+    BotManager.instance().remove_bot_index(entity.index)
 
 
 # =============================================================================

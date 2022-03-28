@@ -113,6 +113,7 @@ SENTRY_MEMBERS = (
         "type": "int",
         "relative": "m_iHighestUpgradeLevel",
         "offset": 4,
+        # TODO correct serverclass
     },
 )
 

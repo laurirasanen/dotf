@@ -14,6 +14,7 @@
 # =============================================================================
 # Source.Python
 from platform import platform
+from tokenize import Number
 from engines.server import engine_server
 from engines.precache import Model
 from core import PLATFORM
@@ -91,6 +92,20 @@ LOCO_VIRTUALS = (
         "return": DataType.VOID,
     },
     {
+        "name": "GetGroundSpeed",
+        "index": 66 if platform == "windows" else 67,
+        "convention": Convention.THISCALL,
+        "args": (DataType.POINTER,),
+        "return": DataType.FLOAT,
+    },
+    {
+        "name": "GetGroundMotionVector",
+        "index": 67 if platform == "windows" else 68,
+        "convention": Convention.THISCALL,
+        "args": (DataType.POINTER,),
+        "return": DataType.POINTER,
+    },
+    {
         "name": "FaceTowards",
         "index": 73 if platform == "windows" else 74,
         "convention": Convention.THISCALL,
@@ -119,6 +134,13 @@ LOCO_VIRTUALS = (
             DataType.POINTER,
         ),
         "return": DataType.BOOL,
+    },
+    {
+        "name": "StuckMonitor",
+        "index": 101 if platform == "windows" else 102,
+        "convention": Convention.THISCALL,
+        "args": (DataType.POINTER,),
+        "return": DataType.VOID,
     },
 )
 
@@ -202,3 +224,13 @@ class BaseBossLocomotion(Pointer):
         return self.get_virtual("IsPotentiallyTraversable").__call__(
             self, start, end, when, fraction_ptr
         )
+
+    def stuck_monitor(self):
+        self.get_virtual("StuckMonitor").__call__(self)
+
+    def get_ground_speed(self) -> Number:
+        return self.get_virtual("GetGroundSpeed").__call__(self)
+
+    def get_ground_motion_vector(self) -> Vector:
+        data = self.get_virtual("GetGroundMotionVector").__call__(self)
+        return make_object(Vector, data)

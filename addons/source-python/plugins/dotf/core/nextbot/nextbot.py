@@ -21,7 +21,7 @@ from pprint import pprint
 from engines.trace import engine_trace, Ray, ContentMasks, TraceFilterSimple, GameTrace
 from engines.server import engine_server, server
 from engines.precache import Model
-from core import PLATFORM
+from core import PLATFORM, get_interface
 from entities import TakeDamageInfo
 from entities.entity import Entity
 from memory import (
@@ -116,6 +116,13 @@ NBCC_VIRTUALS = (
         "return": DataType.POINTER,
     },
     {
+        "name": "StudioFrameAdvance",
+        "index": 194 if PLATFORM == "windows" else 195,
+        "convention": Convention.THISCALL,
+        "args": (DataType.POINTER,),
+        "return": DataType.VOID,
+    },
+    {
         "name": "SetSequence",
         "index": 195 if PLATFORM == "windows" else 196,
         "convention": Convention.THISCALL,
@@ -124,6 +131,16 @@ NBCC_VIRTUALS = (
             DataType.INT,
         ),
         "return": DataType.POINTER,
+    },
+    {
+        "name": "DispatchAnimEvents",
+        "index": 206 if PLATFORM == "windows" else 207,
+        "convention": Convention.THISCALL,
+        "args": (
+            DataType.POINTER,
+            DataType.POINTER,
+        ),
+        "return": DataType.VOID,
     },
     {
         "name": "LookupSequence",
@@ -241,7 +258,7 @@ NBCC_MEMBERS = (
     {
         "name": "m_pStudioHdr",
         "relative": "m_flFadeScale",
-        "offset": 8,
+        "offset": 28,
         "server_class": BA_SERVER_CLASS,
     },
 )
@@ -348,7 +365,6 @@ class NextBotCombatCharacter(Entity):
         tmp = Model(self.config["model"], True, False)  # precache
         # needed instead of self.model = Model?
         self.get_virtual("SetModel").__call__(self, self.config["model"])
-        # self.get_virtual("LockStudioHdr").__call__(self)
 
         self.set_property_float("m_flModelScale", self.config.as_float("model_scale"))
         self.set_property_int("m_iTeamNum", self.team)
@@ -358,6 +374,7 @@ class NextBotCombatCharacter(Entity):
             if self.team == Team.BLU
             else self.config.as_int("model_skin_red"),
         )
+        self.set_property_bool("m_bClientSideAnimation", True)
 
         # Spawn!
         self.get_virtual("Spawn").__call__(self)
@@ -366,17 +383,15 @@ class NextBotCombatCharacter(Entity):
         self.max_health = self.config.as_int("health")
         self.health = self.config.as_int("health")
 
-        self.play_animation(self.config["model_anim_move"])
-        self.set_pose_param("move_x", 1.0)
+        self.set_animation(self.config["model_anim_move"])
 
         # Setup hooks
         self.get_virtual("Event_Killed").add_pre_hook(self.pre_killed)
         self.get_virtual("OnTakeDamage").add_pre_hook(self.pre_take_damage)
 
-    def play_animation(self, anim):
+    def set_animation(self, anim):
         seq = self.get_virtual("LookupSequence").__call__(self, anim)
         self.get_virtual("ResetSequence").__call__(self, seq)
-        self.set_property_float("m_flPlaybackRate", 1.0)
 
     def get_studio_model_ptr(self):
         studio_model = self.get_member_pointer("m_pStudioHdr")
@@ -391,19 +406,6 @@ class NextBotCombatCharacter(Entity):
         if model_ptr is None:
             return
 
-        # print(f"model_ptr ad1: {model_ptr.address}")
-
-        if model_ptr.address == 0:
-            # Lock updates m_pStudioHdr from cache
-            self.get_virtual("LockStudioHdr").__call__(self)
-            model_ptr = self.get_studio_model_ptr()
-
-        # FIXME: still null here, something in LockStudioHdr failing?
-        if model_ptr.address == 0:
-            Logger.instance().log_debug(f"m_pStudioHdr is null")
-            return
-
-        # print(f"model_ptr ad2: {model_ptr.address}")
         # pose = self.get_virtual("LookupPoseParameter").__call__(self, model_ptr, param)
         # if pose < 0:
         #     Logger.instance().log_debug(f"No pose parameter {param}")
@@ -445,8 +447,28 @@ class NextBotCombatCharacter(Entity):
 
         self.locomotor.set_desired_speed(self.config.as_float("move_speed"))
         self.get_member_pointer("m_speed").set_float(self.config.as_float("move_speed"))
+        self.locomotor.stuck_monitor()
         self.locomotor.approach(self.target_pos, 0.1)
         self.locomotor.face_towards(self.target_pos)
+
+        # anim params
+        movement = self.locomotor.get_ground_motion_vector()
+        forward = Vector()
+        right = Vector()
+        self.angles.get_angle_vectors(forward, right)
+        self.set_pose_param(
+            "move_x", movement.dot(forward) * (1 if self.team == Team.BLU else -1)
+        )
+        self.set_pose_param("move_y", movement.dot(right))
+
+        # anim playback speed
+        expected_speed = self.get_property_float("m_speed")
+        if expected_speed != 0:
+            ground_speed = self.locomotor.get_ground_speed()
+            self.set_property_float("m_flPlaybackRate", ground_speed / expected_speed)
+
+        self.get_virtual("StudioFrameAdvance").__call__(self)
+        self.get_virtual("DispatchAnimEvents").__call__(self, self)
 
     def remove_hooks(self):
         Logger.instance().log_debug(f"NBCC remove_hooks")

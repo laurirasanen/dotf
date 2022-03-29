@@ -121,13 +121,13 @@ SENTRY_MEMBERS = (
 class Sentry(Entity):
     @staticmethod
     def create():
-        Logger.instance().log_debug("Sentry create")
+        # Logger.instance().log_debug("Sentry create")
         entity = Entity.create(SENTRY_CLASSNAME)
         entity.target_name = SENTRY_TARGET_NAME
         return Sentry(entity.index)
 
     def __init__(self, index, caching=True):
-        Logger.instance().log_debug("Sentry __init__")
+        # Logger.instance().log_debug("Sentry __init__")
         super().__init__(index, caching)
         self.virtuals = []
 
@@ -157,7 +157,7 @@ class Sentry(Entity):
         # Create
         for virtual in SENTRY_VIRTUALS:
             if virtual["name"] == name:
-                Logger.instance().log_debug(f"NBCC create virtual {name}")
+                # Logger.instance().log_debug(f"Sentry create virtual {name}")
                 func = get_object_pointer(self).make_virtual_function(
                     virtual["index"],
                     virtual["convention"],
@@ -179,7 +179,7 @@ class Sentry(Entity):
     # >> VIRTUALS
     # =============================================================================
     def spawn(self, origin: Vector, angles: QAngle, team: Team, lane: int, tier: int):
-        Logger.instance().log_debug("Sentry spawn")
+        # Logger.instance().log_debug("Sentry spawn")
 
         trace = GameTrace()
         engine_trace.trace_ray(
@@ -221,24 +221,6 @@ class Sentry(Entity):
         # this prevents repairing
         self.set_property_bool("m_bDisposableBuilding", True)
 
-        # Test
-        for member in SENTRY_MEMBERS:
-            pointer = self.get_member_pointer(member["name"])
-            if pointer is None:
-                Logger.instance().log_debug(f"  {member['name']}: NOT FOUND")
-            elif member["type"] == "bool":
-                Logger.instance().log_debug(f"  {member['name']}: {pointer.get_bool()}")
-            elif member["type"] == "int":
-                Logger.instance().log_debug(f"  {member['name']}: {pointer.get_int()}")
-            elif member["type"] == "float":
-                Logger.instance().log_debug(
-                    f"  {member['name']}: {pointer.get_float()}"
-                )
-            elif member["type"] == "pointer":
-                Logger.instance().log_debug(
-                    f"  {member['name']}: {pointer.get_pointer()}"
-                )
-
         # Setup hooks
         self.get_virtual("Event_Killed").add_pre_hook(self.pre_killed)
 
@@ -259,7 +241,7 @@ class Sentry(Entity):
         )
 
     def remove_hooks(self):
-        Logger.instance().log_debug(f"Sentry remove_hooks")
+        # Logger.instance().log_debug(f"Sentry remove_hooks")
         self.get_virtual("Event_Killed").remove_pre_hook(self.pre_killed)
 
     def get_damage(self):

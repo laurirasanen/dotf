@@ -216,9 +216,10 @@ def on_client_disconnect(index):
 
 
 @OnEntityDeleted
-def on_entity_spawned(entity):
+def on_entity_deleted(entity):
     # Logger.instance().log_debug(f"entity_deleted: {entity.classname}")
-    BotManager.instance().remove_bot_index(entity.index)
+    if entity.classname == "base_boss":
+        BotManager.instance().remove_bot_index(entity.index)
 
 
 # =============================================================================

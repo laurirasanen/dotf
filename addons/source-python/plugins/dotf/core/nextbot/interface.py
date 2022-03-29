@@ -39,13 +39,6 @@ from ..log import Logger
 # =============================================================================
 INB_VIRTUALS = (
     {
-        "name": "Deconstructor",
-        "index": 0,
-        "convention": Convention.THISCALL,
-        "args": (DataType.POINTER,),
-        "return": DataType.VOID,
-    },
-    {
         "name": "Update",
         "index": 43 if platform == "windows" else 44,
         "convention": Convention.THISCALL,
@@ -57,7 +50,7 @@ INB_VIRTUALS = (
 
 class NextBotInterface(Pointer):
     def __init__(self, pointer, update_cb) -> None:
-        Logger.instance().log_debug("iNB __init__")
+        # Logger.instance().log_debug("iNB __init__")
         super().__init__(pointer)
         self.virtuals = []
         self.update_cb = update_cb
@@ -72,7 +65,7 @@ class NextBotInterface(Pointer):
         # Create
         for virtual in INB_VIRTUALS:
             if virtual["name"] == name:
-                Logger.instance().log_debug(f"iNB create virtual {name}")
+                # Logger.instance().log_debug(f"iNB create virtual {name}")
                 func = self.make_virtual_function(
                     virtual["index"],
                     virtual["convention"],

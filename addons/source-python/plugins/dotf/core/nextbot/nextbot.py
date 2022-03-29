@@ -58,13 +58,6 @@ ENTITY_IS_NBCC = lambda entity: entity.classname == NBCC_CLASSNAME
 
 NBCC_VIRTUALS = (
     {
-        "name": "Deconstructor",
-        "index": 0,
-        "convention": Convention.THISCALL,
-        "args": (DataType.POINTER,),
-        "return": DataType.VOID,
-    },
-    {
         "name": "GetBaseEntity",
         "index": 5 if PLATFORM == "windows" else 6,
         "convention": Convention.THISCALL,
@@ -179,20 +172,6 @@ NBCC_VIRTUALS = (
         ),
         "return": DataType.INT,
     },
-    # {
-    #     "name": "SetPoseParameter",
-    #     "signature": ""
-    #     if PLATFORM == "windows"
-    #     else "_ZN14CBaseAnimating16SetPoseParameterEP10CStudioHdrif",
-    #     "convention": Convention.THISCALL,
-    #     "args": (
-    #         DataType.POINTER,
-    #         DataType.POINTER,
-    #         DataType.INT,
-    #         DataType.FLOAT,
-    #     ),
-    #     "return": DataType.FLOAT,
-    # },
     {
         "name": "SetPoseParameter",
         "signature": ""
@@ -206,15 +185,6 @@ NBCC_VIRTUALS = (
             DataType.FLOAT,
         ),
         "return": DataType.FLOAT,
-    },
-    {
-        "name": "LockStudioHdr",
-        "signature": ""
-        if PLATFORM == "windows"
-        else "_ZN14CBaseAnimating13LockStudioHdrEv",
-        "convention": Convention.THISCALL,
-        "args": (DataType.POINTER,),
-        "return": DataType.VOID,
     },
 )
 
@@ -267,12 +237,12 @@ NBCC_MEMBERS = (
 class NextBotCombatCharacter(Entity):
     @staticmethod
     def create():
-        Logger.instance().log_debug("NBCC create")
+        # Logger.instance().log_debug("NBCC create")
         entity = Entity.create(NBCC_CLASSNAME)
         return NextBotCombatCharacter(entity.index)
 
     def __init__(self, index, caching=False):
-        Logger.instance().log_debug("NBCC __init__")
+        # Logger.instance().log_debug("NBCC __init__")
         super().__init__(index, caching)
         self.virtuals = []
         self.locomotor = BaseBossLocomotion(
@@ -306,7 +276,7 @@ class NextBotCombatCharacter(Entity):
         for virtual in NBCC_VIRTUALS:
             if virtual["name"] == name:
                 if "index" in virtual:
-                    Logger.instance().log_debug(f"NBCC create virtual function {name}")
+                    # Logger.instance().log_debug(f"NBCC create virtual function {name}")
                     func = get_object_pointer(self).make_virtual_function(
                         virtual["index"],
                         virtual["convention"],
@@ -321,13 +291,11 @@ class NextBotCombatCharacter(Entity):
                     )
                     return func
                 elif "signature" in virtual:
-                    Logger.instance().log_debug(
-                        f"NBCC create non-virtual function {name}"
-                    )
+                    # Logger.instance().log_debug(
+                    #     f"NBCC create non-virtual function {name}"
+                    # )
                     binary = find_binary("server_srv", False)
-                    print(f"binary: {binary}")
                     address = binary.find_address(virtual["signature"])
-                    print(f"address: {address}")
                     func = address.make_function(
                         virtual["convention"],
                         virtual["args"],
@@ -350,11 +318,12 @@ class NextBotCombatCharacter(Entity):
     # =============================================================================
     def spawn(self, origin: Vector, angles: QAngle, team: Team, bot_type: BotType):
         self.origin = origin
-        self.angles = angles
+        # this messes up animations somehow
+        # self.angles = angles
         self.team = team
         self.bot_type = bot_type
         self.target_pos = origin
-        Logger.instance().log_debug("NBCC spawn")
+        # Logger.instance().log_debug("NBCC spawn")
 
         self.config = (
             bot_config["bot_melee"]
@@ -362,11 +331,9 @@ class NextBotCombatCharacter(Entity):
             else bot_config["bot_ranged"]
         )
 
-        tmp = Model(self.config["model"], True, False)  # precache
-        # needed instead of self.model = Model?
-        self.get_virtual("SetModel").__call__(self, self.config["model"])
-
+        self.model = Model(self.config["model"], True, False)
         self.set_property_float("m_flModelScale", self.config.as_float("model_scale"))
+        self.set_property_bool("m_bClientSideAnimation", True)
         self.set_property_int("m_iTeamNum", self.team)
         self.set_property_int(
             "m_nSkin",
@@ -374,7 +341,6 @@ class NextBotCombatCharacter(Entity):
             if self.team == Team.BLU
             else self.config.as_int("model_skin_red"),
         )
-        self.set_property_bool("m_bClientSideAnimation", True)
 
         # Spawn!
         self.get_virtual("Spawn").__call__(self)
@@ -387,7 +353,7 @@ class NextBotCombatCharacter(Entity):
 
         # Setup hooks
         self.get_virtual("Event_Killed").add_pre_hook(self.pre_killed)
-        self.get_virtual("OnTakeDamage").add_pre_hook(self.pre_take_damage)
+        # self.get_virtual("OnTakeDamage").add_pre_hook(self.pre_take_damage)
 
     def set_animation(self, anim):
         seq = self.get_virtual("LookupSequence").__call__(self, anim)
@@ -404,29 +370,25 @@ class NextBotCombatCharacter(Entity):
     def set_pose_param(self, param, value):
         model_ptr = self.get_studio_model_ptr()
         if model_ptr is None:
-            return
+            return None
 
-        # pose = self.get_virtual("LookupPoseParameter").__call__(self, model_ptr, param)
-        # if pose < 0:
-        #     Logger.instance().log_debug(f"No pose parameter {param}")
-        #     return
-        # print(f"poseparam {param} id: {pose}")
-
-        self.get_virtual("SetPoseParameter").__call__(self, model_ptr, param, value)
+        return self.get_virtual("SetPoseParameter").__call__(
+            self, model_ptr, param, value
+        )
 
     def pre_killed(self, stack_data):
         if stack_data[0].address != get_object_pointer(self).address:
             return
 
-        Logger.instance().log_debug(f"NBCC pre_killed")
+        # Logger.instance().log_debug(f"NBCC pre_killed")
         self.remove_hooks()
 
-    def pre_take_damage(self, stack_data):
-        if stack_data[0].address != get_object_pointer(self).address:
-            return
+    # def pre_take_damage(self, stack_data):
+    #     if stack_data[0].address != get_object_pointer(self).address:
+    #         return
 
-        Logger.instance().log_debug(f"NBCC pre_take_damage")
-        pprint(make_object(TakeDamageInfo, stack_data[1]))
+    #     Logger.instance().log_debug(f"NBCC pre_take_damage")
+    #     pprint(make_object(TakeDamageInfo, stack_data[1]))
 
     def update(self):
         # Called right before INextBot::Update from interface.py.
@@ -452,26 +414,32 @@ class NextBotCombatCharacter(Entity):
         self.locomotor.face_towards(self.target_pos)
 
         # anim params
-        movement = self.locomotor.get_ground_motion_vector()
-        forward = Vector()
-        right = Vector()
-        self.angles.get_angle_vectors(forward, right)
-        self.set_pose_param(
-            "move_x", movement.dot(forward) * (1 if self.team == Team.BLU else -1)
-        )
-        self.set_pose_param("move_y", movement.dot(right))
-
-        # anim playback speed
-        expected_speed = self.get_property_float("m_speed")
+        expected_speed = float(self.config.as_float("move_speed"))
         if expected_speed != 0:
+            movement = self.locomotor.get_ground_motion_vector()
+            forward = Vector()
+            right = Vector()
+            self.angles.get_angle_vectors(forward, right)
             ground_speed = self.locomotor.get_ground_speed()
-            self.set_property_float("m_flPlaybackRate", ground_speed / expected_speed)
+            frac = ground_speed / expected_speed
+            # FIXME: why are animation params so fucked?
+            # multiplying dot here with anything other than
+            # a const val just breaks animations...
+            # f_val = min(1.0, movement.dot(forward) * frac)
+            # r_val = min(1.0, movement.dot(right) * frac)
+            self.set_pose_param("move_x", movement.dot(forward))
+            self.set_pose_param("move_y", movement.dot(right))
+            if self.bot_type == BotType.RANGED:
+                self.set_pose_param("move_scale", 1.0)
+                # self.set_pose_param("move_scale", min(1.0, frac))
+            self.set_property_float("m_flPlaybackRate", frac)
+            # self.set_property_float("m_flPlaybackRate", max(1.0, frac))
 
         self.get_virtual("StudioFrameAdvance").__call__(self)
         self.get_virtual("DispatchAnimEvents").__call__(self, self)
 
     def remove_hooks(self):
-        Logger.instance().log_debug(f"NBCC remove_hooks")
+        # Logger.instance().log_debug(f"NBCC remove_hooks")
         if self.locomotor is not None:
             self.locomotor.remove_hooks()
             self.locomotor = None
@@ -479,4 +447,4 @@ class NextBotCombatCharacter(Entity):
             self.interface.remove_hooks()
             self.interface = None
         self.get_virtual("Event_Killed").remove_pre_hook(self.pre_killed)
-        self.get_virtual("OnTakeDamage").remove_pre_hook(self.pre_take_damage)
+        # self.get_virtual("OnTakeDamage").remove_pre_hook(self.pre_take_damage)

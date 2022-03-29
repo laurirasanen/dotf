@@ -14,7 +14,6 @@
 # =============================================================================
 # Source.Python
 from platform import platform
-from tokenize import Number
 from engines.server import engine_server
 from engines.precache import Model
 from core import PLATFORM
@@ -39,13 +38,6 @@ from ..log import Logger
 # >> GLOBAL VARIABLES
 # =============================================================================
 LOCO_VIRTUALS = (
-    {
-        "name": "Deconstructor",
-        "index": 0,
-        "convention": Convention.THISCALL,
-        "args": (DataType.POINTER,),
-        "return": DataType.VOID,
-    },
     {
         "name": "Update",
         "index": 43 if platform == "windows" else 44,
@@ -147,7 +139,7 @@ LOCO_VIRTUALS = (
 
 class BaseBossLocomotion(Pointer):
     def __init__(self, pointer) -> None:
-        Logger.instance().log_debug("LOCO __init__")
+        # Logger.instance().log_debug("LOCO __init__")
         super().__init__(pointer)
         self.virtuals = []
         self.get_virtual("Update").add_pre_hook(self.pre_update)
@@ -161,7 +153,7 @@ class BaseBossLocomotion(Pointer):
         # Create
         for virtual in LOCO_VIRTUALS:
             if virtual["name"] == name:
-                Logger.instance().log_debug(f"LOCO create virtual {name}")
+                # Logger.instance().log_debug(f"LOCO create virtual {name}")
                 func = self.make_virtual_function(
                     virtual["index"],
                     virtual["convention"],
@@ -228,7 +220,7 @@ class BaseBossLocomotion(Pointer):
     def stuck_monitor(self):
         self.get_virtual("StuckMonitor").__call__(self)
 
-    def get_ground_speed(self) -> Number:
+    def get_ground_speed(self) -> float:
         return self.get_virtual("GetGroundSpeed").__call__(self)
 
     def get_ground_motion_vector(self) -> Vector:
